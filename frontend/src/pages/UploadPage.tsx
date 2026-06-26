@@ -64,7 +64,7 @@ export const UploadPage: React.FC = () => {
 
     try {
       const fileExt = file.name.split('.').pop()
-      const folderName = user ? user.id : 'guest'
+      const folderName = user!.id
       const fileName = `${folderName}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
       
       setProgress(30)
@@ -87,7 +87,7 @@ export const UploadPage: React.FC = () => {
       const { data: docData, error: docErr } = await supabase
         .from('documents')
         .insert({
-          user_id: user ? user.id : null,
+          user_id: user!.id,
           name: sanitizedName,
           file_path: storageData.path,
           mime_type: file.type || `image/${fileExt}`,
@@ -105,16 +105,8 @@ export const UploadPage: React.FC = () => {
 
       setProgress(90)
 
-      // Save guest document ID to localStorage
-      if (!user) {
-        const guestDocs = localStorage.getItem('guest_documents')
-        const docsList = guestDocs ? JSON.parse(guestDocs) : []
-        docsList.push(docData.id)
-        localStorage.setItem('guest_documents', JSON.stringify(docsList))
-      }
-
       await supabase.from('file_uploads').insert({
-        user_id: user ? user.id : null,
+        user_id: user!.id,
         file_name: file.name,
         file_size: file.size,
         mime_type: file.type || `image/${fileExt}`,
@@ -137,7 +129,7 @@ export const UploadPage: React.FC = () => {
 
       try {
         await supabase.from('failed_uploads').insert({
-          user_id: user ? user.id : null,
+          user_id: user?.id ?? null,
           file_name: file?.name || "unknown",
           error_message: err?.message || String(err) || "Unknown upload error",
         })

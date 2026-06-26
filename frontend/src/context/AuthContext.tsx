@@ -14,6 +14,7 @@ interface AuthContextType {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  isAnonymous: boolean
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const isAnonymous = user?.is_anonymous ?? false
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -53,24 +55,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id).then(() => setLoading(false))
+    // Get initial session; if none exists, sign in anonymously so every
+    // visitor has a real auth.uid() — enabling strict, uniform RLS policies.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setSession(session)
+        setUser(session.user)
+        await fetchProfile(session.user.id)
+        setLoading(false)
       } else {
+        // No session — bootstrap an anonymous one
+        const { data, error } = await supabase.auth.signInAnonymously()
+        if (!error && data.session) {
+          setSession(data.session)
+          setUser(data.user)
+          // Anonymous users won't have a profiles row yet; that's fine —
+          // fetchProfile will return null and we just skip it.
+          if (data.user && !data.user.is_anonymous) {
+            await fetchProfile(data.user.id)
+          }
+        }
         setLoading(false)
       }
     })
 
-    // Listen for auth changes
+    // Listen for auth changes (sign-in, sign-out, token refresh, linking)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         setSession(newSession)
         setUser(newSession?.user ?? null)
-        
-        if (newSession?.user) {
+
+        if (newSession?.user && !newSession.user.is_anonymous) {
           await fetchProfile(newSession.user.id)
         } else {
           setProfile(null)
@@ -100,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         profile,
         loading,
+        isAnonymous,
         signOut,
         refreshProfile,
       }}
