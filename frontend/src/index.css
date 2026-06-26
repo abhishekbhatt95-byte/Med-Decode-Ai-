@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: oklch(0.99 0.005 240);
+  --foreground: oklch(0.15 0.015 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.015 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.015 240);
+  --primary: oklch(0.38 0.17 254);
+  --primary-foreground: oklch(0.99 0.005 240);
+  --secondary: oklch(0.96 0.01 240);
+  --secondary-foreground: oklch(0.2 0.02 240);
+  --muted: oklch(0.96 0.01 240);
+  --muted-foreground: oklch(0.45 0.02 240);
+  --accent: oklch(0.96 0.01 240);
+  --accent-foreground: oklch(0.2 0.02 240);
+  --destructive: oklch(0.55 0.22 28);
+  --destructive-foreground: oklch(0.99 0.005 240);
+  --border: oklch(0.92 0.01 240);
+  --input: oklch(0.92 0.01 240);
+  --ring: oklch(0.38 0.17 254 / 0.2);
+  --radius: 1rem;
+}
+
+.dark {
+  --background: oklch(0.13 0.015 240);
+  --foreground: oklch(0.97 0.01 240);
+  --card: oklch(0.16 0.015 240);
+  --card-foreground: oklch(0.97 0.01 240);
+  --popover: oklch(0.16 0.015 240);
+  --popover-foreground: oklch(0.97 0.01 240);
+  --primary: oklch(0.55 0.18 254);
+  --primary-foreground: oklch(0.1 0.01 240);
+  --secondary: oklch(0.22 0.015 240);
+  --secondary-foreground: oklch(0.97 0.01 240);
+  --muted: oklch(0.22 0.015 240);
+  --muted-foreground: oklch(0.65 0.02 240);
+  --accent: oklch(0.22 0.015 240);
+  --accent-foreground: oklch(0.97 0.01 240);
+  --destructive: oklch(0.45 0.18 28);
+  --destructive-foreground: oklch(0.97 0.01 240);
+  --border: oklch(0.25 0.015 240);
+  --input: oklch(0.25 0.015 240);
+  --ring: oklch(0.55 0.18 254 / 0.4);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --border-radius-lg: var(--radius);
+  --border-radius-md: calc(var(--radius) - 4px);
+  --border-radius-sm: calc(var(--radius) - 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50 transition-colors duration-200;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* --- Premium Animations & Custom Layout Helpers --- */
+
+/* Floating animation for Landing hero illustration card */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Scanner bar bounce animation for Processing state */
+@keyframes scan {
+  0% { top: 0%; }
+  50% { top: 100%; }
+  100% { top: 0%; }
+}
+
+.animate-scan {
+  animation: scan 2.5s linear infinite;
+}
+
+/* Responsive Printing Style overrides for clean PDF Exports */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:p-0 {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print\:text-black {
+    color: black !important;
+  }
+
+  .bg-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Force expanded state for printing */
+  .p-5 + div {
+    display: block !important;
+  }
+}
+
+/* Accessibility Modes */
+.accessibility-large-text {
+  font-size: 1.2rem !important;
+}
+
+.accessibility-large-text h1 {
+  font-size: 3.5rem !important;
+  line-height: 1.2 !important;
+}
+
+.accessibility-large-text h2 {
+  font-size: 2rem !important;
+  line-height: 1.3 !important;
+}
+
+.accessibility-large-text p, 
+.accessibility-large-text span, 
+.accessibility-large-text button, 
+.accessibility-large-text a, 
+.accessibility-large-text label,
+.accessibility-large-text input,
+.accessibility-large-text textarea {
+  font-size: 1.25rem !important;
+  line-height: 1.6 !important;
+}
+
+/* High Contrast mode colors */
+.accessibility-high-contrast {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --border: oklch(0 0 0);
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(1 0 0);
+  --secondary-foreground: oklch(0 0 0);
+}
+
+.dark.accessibility-high-contrast {
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --border: oklch(1 0 0);
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0 0 0);
+  --secondary-foreground: oklch(1 0 0);
+}
