@@ -63,8 +63,10 @@ async function fetchWithRetry(url: string, options: RequestInit, timeoutMs: numb
   
   // Final attempt if retries exhausted
   return fetchWithTimeout(url, options, timeoutMs)
-}// Run OCR using OCR.space with a specific OCREngine
-async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engine: string): Promise<string> {
+}
+
+// Run OCR using OCR.space with a specific OCREngine
+async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engine: string): Promise<{ text: string; ocrExitCode: number | null }> {
   const formData = new FormData()
   formData.append('url', fileUrl)
   formData.append('language', 'eng')
@@ -115,7 +117,8 @@ async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engi
     throw new Error('No readable text found in document.')
   }
 
-  return extractedText
+  const ocrExitCode = ocrJson.OCRExitCode !== undefined ? Number(ocrJson.OCRExitCode) : null
+  return { text: extractedText, ocrExitCode }
 }
 
 function uint8ArrayToBase64(uint8: Uint8Array): string {
@@ -144,6 +147,19 @@ function cleanAndParseJson(text: string): any {
   }
   cleaned = cleaned.trim();
   return JSON.parse(cleaned);
+}
+
+// Converts Gemini's self-rated "high"/"medium"/"low" confidence (instruction 7
+// in the prompt) into a 0-100 score. Replaces the old hardcoded 95.0/98.0
+// constants — every document used to get the exact same fake number
+// regardless of how legible the source actually was.
+function confidenceLabelToScore(label: any): number {
+  switch (String(label || '').toLowerCase().trim()) {
+    case 'high': return 95
+    case 'medium': return 70
+    case 'low': return 40
+    default: return 50 // Gemini didn't return a usable label — treat as genuinely uncertain, not "excellent"
+  }
 }
 
 serve(async (req) => {
@@ -265,7 +281,7 @@ serve(async (req) => {
 
     console.log(`Processing: ${document.name} (${isPdf ? 'PDF' : 'image'})`)
 
-    // Pre-fetch file contents for multimodal vision input if size < 15MB
+    // Pre-fetch file contents for multimodal vision input if size < 21MB
     let base64Data = ""
     let includeFile = false
     const sizeInMb = document.size / (1024 * 1024)
@@ -301,18 +317,30 @@ serve(async (req) => {
 
     // 3. OCR via OCR.space (with 30s timeout)
     let extractedText = ""
+    let ocrExitCode: number | null = null
+    let usedFallbackEngine = false
     const ocrProvider = "ocr_space"
-    const ocrSpaceKey = Deno.env.get('OCR_SPACE_API_KEY') || 'helloworld'
+    const configuredOcrKey = Deno.env.get('OCR_SPACE_API_KEY')
+    if (!configuredOcrKey) {
+      console.error("OCR_SPACE_API_KEY is not set! Falling back to the public 'helloworld' demo key, " +
+        "which is heavily rate-limited and size-capped. Set a real key as a Supabase secret before relying on this in production.")
+    }
+    const ocrSpaceKey = configuredOcrKey || 'helloworld'
 
     try {
       // Try Engine 3 first as it is designed for high-accuracy and handwriting (doctor prescriptions)
       try {
-        extractedText = await runOcr(fileUrl, isPdf, ocrSpaceKey, '3')
+        const engine3Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '3')
+        extractedText = engine3Result.text
+        ocrExitCode = engine3Result.ocrExitCode
         console.log(`OCR Engine 3 succeeded. Text length: ${extractedText.length}`)
       } catch (engine3Err: any) {
         console.warn(`OCR Engine 3 failed: ${engine3Err.message}. Falling back to Engine 1...`)
         // Fallback to Engine 1 (standard speed/printed engine)
-        extractedText = await runOcr(fileUrl, isPdf, ocrSpaceKey, '1')
+        const engine1Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '1')
+        extractedText = engine1Result.text
+        ocrExitCode = engine1Result.ocrExitCode
+        usedFallbackEngine = true
         console.log(`OCR Engine 1 (fallback) succeeded. Text length: ${extractedText.length}`)
       }
     } catch (ocrErr: any) {
@@ -329,13 +357,27 @@ serve(async (req) => {
       }
     }
 
+    // Heuristic OCR confidence: OCR.space does not return a numeric confidence
+    // score anywhere in its response — only an OCRExitCode (1=success,
+    // 2=partial success, 3/4=failure). This maps that signal, plus whether we
+    // had to fall back to the non-handwriting-tuned Engine 1, and whether we
+    // got any usable text at all, onto a 0-100 estimate. It's a heuristic
+    // standing in for a real measurement OCR.space simply doesn't provide —
+    // not a precise number, and the code/comments should keep saying so.
+    function computeOcrConfidence(): number {
+      if (!extractedText) return 20 // no OCR text at all; relying purely on Gemini's own vision read
+      let score = ocrExitCode === 1 ? 90 : ocrExitCode === 2 ? 65 : 35
+      if (usedFallbackEngine) score -= 10 // the handwriting-tuned engine couldn't handle it
+      return Math.max(0, Math.min(100, score))
+    }
+
     // Save extracted text (if we got any)
     if (extractedText) {
       await supabase.from('extracted_text').insert({
         document_id: documentId,
         raw_text: extractedText,
         ocr_provider: ocrProvider,
-        confidence: 0.90
+        confidence: computeOcrConfidence() / 100
       })
 
       await supabase.from('ocr_results').insert({
@@ -355,7 +397,7 @@ Your task is to analyze the medical document provided (which may contain multipl
 You are given a raw OCR text extraction of the document (note: this OCR may be partial, incomplete, or cover only the first page), and the actual document file itself as a multimodal image/PDF.
 
 OCR Text:
-${maskPII(extractedText.substring(0, 4000))}
+${maskPII(extractedText.substring(0, 16000))}
 
 Please perform a deep, comprehensive analysis of both the OCR text and the visual document across ALL pages to transcribe and translate all information accurately.
 
@@ -370,11 +412,18 @@ Instructions:
 4. TRANSLATE MEDICAL SHORT-HAND: Translate common medical abbreviations and Latin symbols (e.g., OD, BD, TDS, HS, PRN, QID, p.c., a.c., SOS, stat) into plain English instructions (e.g., Once daily, Twice daily, Three times daily, At bedtime, As needed, Four times daily, After food, Before food, In emergency, Immediately).
 5. EXPLAIN CLINICAL TERMS: In the "explanation.sections" field, define and explain any medical terms, clinical conditions, or diagnostic findings mentioned (e.g., hydronephrosis, sinus rhythm, lead off, hyperlipidemia) in comforting, patient-friendly, plain English terms.
 6. NON-MEDICAL REJECTION: If the document is completely unrelated to medical care (e.g., a fee receipt, invoice, design document, bank statement, ID card), set "isMedical" to false.
+7. SELF-RATE YOUR CONFIDENCE: For every medicine and every abnormal value you extract, add a "confidence" field set to "high", "medium", or "low":
+   - "high": the text was clearly printed/typed, or handwriting was unambiguous.
+   - "medium": legible but with some uncertainty (stylized handwriting, partial visibility, minor inference needed).
+   - "low": the handwriting or print was genuinely hard to read and you are pattern-matching to a plausible known medication/value rather than reading it directly.
+   Be conservative and honest here — if you had to guess, mark it "low", not "high". Also set a top-level "overallConfidence" ("high"/"medium"/"low") reflecting your overall certainty about the whole document's transcription.
+8. BILLING DOCUMENTS: If the document includes an itemized hospital bill, invoice, or charges (common when stapled to discharge summaries), extract each line item into the "billItems" array with its description and amount, and the grand total into "billTotal". If there is no billing content, return an empty array and null total.
 
 Return ONLY valid JSON (no markdown block, no explanation) matching this exact format:
 {
   "isMedical": boolean,
   "documentType": "prescription" | "blood_report" | "diagnostic_report" | "hospital_bill" | "discharge_summary" | "medicine_label" | "unknown",
+  "overallConfidence": "high" | "medium" | "low",
   "summary": "A 2-3 sentence plain English overview of what the document is, its main findings, and the general clinical picture.",
   "medicalSummary": "A 2-3 sentence professional, clinically accurate medical summary of the document, using standard medical terminology suitable for a doctor or medical advisor.",
   "explanation": {
@@ -394,7 +443,8 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       "howItWorks": "string",
       "sideEffects": "string",
       "foodRestrictions": "string",
-      "precautions": "string"
+      "precautions": "string",
+      "confidence": "high" | "medium" | "low"
     }
   ],
   "doctorQuestions": [
@@ -405,16 +455,22 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       "parameter": "string",
       "value": "string",
       "referenceRange": "string",
-      "explanation": "A plain English explanation of why this parameter is flag-worthy and what it indicates."
+      "explanation": "A plain English explanation of why this parameter is flag-worthy and what it indicates.",
+      "confidence": "high" | "medium" | "low"
     }
-  ]
+  ],
+  "billItems": [
+    {
+      "description": "string",
+      "amount": "string"
+    }
+  ],
+  "billTotal": "string or null"
 }`
 
     const modelsToTry = [
-      'gemini-3.5-flash',
       'gemini-2.5-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-2.0-flash',
+      'gemini-2.5-flash-lite',
       'gemini-flash-latest'
     ]
 
@@ -512,7 +568,9 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
         structured_output: {
           sections: rawAnalysis.explanation?.sections || [],
           abnormalValues: rawAnalysis.abnormalValues || [],
-          medicalSummary: rawAnalysis.medicalSummary || ''
+          medicalSummary: rawAnalysis.medicalSummary || '',
+          billItems: rawAnalysis.billItems || [],
+          billTotal: rawAnalysis.billTotal ?? null
         },
         doctor_questions: rawAnalysis.doctorQuestions || []
       })
@@ -535,7 +593,7 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
         side_effects: m.sideEffects || "",
         food_restrictions: m.foodRestrictions || "",
         precautions: m.precautions || "",
-        confidence_score: 95.0
+        confidence_score: confidenceLabelToScore(m.confidence)
       }))
       const { error: medsErr } = await supabase.from('medicines').insert(medicinesRows)
       if (medsErr) {
@@ -547,12 +605,34 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       console.log("No medicines were extracted in rawAnalysis.medicines.")
     }
 
+    // Real confidence scoring, replacing the old hardcoded 90/98/94 constants
+    // that every document received regardless of how mangled the input was.
+    // ocrConfidence: heuristic from OCR.space's exit code (see computeOcrConfidence above).
+    // aiConfidence: Gemini's own self-rated overallConfidence from prompt instruction 7.
+    // overall: weighted toward the AI score, since Gemini's multimodal vision read still
+    // contributes meaningfully even when OCR text is weak or missing entirely.
+    const ocrConfidenceScore = computeOcrConfidence()
+    const aiConfidenceScore = confidenceLabelToScore(rawAnalysis.overallConfidence)
+    const overallConfidenceScore = Math.round(ocrConfidenceScore * 0.4 + aiConfidenceScore * 0.6)
+
     await supabase.from('confidence_scores').insert({
       analysis_id: analysisData.id,
-      ocr_confidence: 90.0,
-      ai_confidence: 98.0,
-      overall_confidence: 94.0
+      ocr_confidence: ocrConfidenceScore,
+      ai_confidence: aiConfidenceScore,
+      overall_confidence: overallConfidenceScore
     })
+
+    // Flag genuinely low-confidence analyses for manual review instead of
+    // silently presenting a guess with the same visual weight as a clean read.
+    if (overallConfidenceScore < 60) {
+      const { error: flagErr } = await supabase.from('review_flags').insert({
+        analysis_id: analysisData.id,
+        flag_reason: `Low confidence analysis (${overallConfidenceScore}%) — OCR and/or AI had difficulty reading this document clearly. Recommend the patient verify medicines, dosages, and values with their doctor or pharmacist before relying on them.`
+      })
+      if (flagErr) {
+        console.error("Failed to insert review_flags row:", flagErr.message)
+      }
+    }
 
     const allowedDocTypes = [
       'prescription',

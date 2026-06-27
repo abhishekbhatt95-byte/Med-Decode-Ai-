@@ -49,6 +49,20 @@ interface Citation {
   url: string
 }
 
+// Maps a real confidence score to a label/icon/color. Previously the UI
+// always showed "✔️ Excellent" regardless of the actual number — meaning a
+// 20% confidence scan looked identical to a 95% one. This makes the label
+// actually track the score that's now computed for real in the backend.
+function getConfidenceDisplay(score: number): { label: string; emoji: string; textClass: string; barClass: string } {
+  if (score >= 80) {
+    return { label: 'Excellent', emoji: '✔️', textClass: 'text-emerald-500', barClass: 'bg-emerald-500' }
+  }
+  if (score >= 60) {
+    return { label: 'Good', emoji: '👍', textClass: 'text-amber-500', barClass: 'bg-amber-500' }
+  }
+  return { label: 'Needs Review', emoji: '⚠️', textClass: 'text-rose-500', barClass: 'bg-rose-500' }
+}
+
 export const ResultsPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -405,7 +419,13 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           <h1 className="text-3xl md:text-4xl font-extrabold text-[#004bb3] tracking-tight">Your Results Explained</h1>
           <p className="text-xs md:text-sm font-semibold text-slate-400">
             Here is a simple summary of your recent {docInfo?.document_type ? docInfo.document_type.replace('_', ' ') : 'Prescription or Report'}. 
-            <span className="text-emerald-500 font-bold ml-2">✔️ Document scan quality: {confidence !== null ? `${confidence}%` : '95%'} – Excellent</span>
+            {confidence !== null ? (
+              <span className={`${getConfidenceDisplay(confidence).textClass} font-bold ml-2`}>
+                {getConfidenceDisplay(confidence).emoji} Document scan quality: {confidence}% – {getConfidenceDisplay(confidence).label}
+              </span>
+            ) : (
+              <span className="text-slate-400 font-bold ml-2">Document scan quality: analyzing…</span>
+            )}
           </p>
         </div>
         
@@ -619,7 +639,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                                   </div>
                                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                                     <div 
-                                      className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                                      className={`${getConfidenceDisplay(med.confidence_score || 95).barClass} h-full rounded-full transition-all duration-500`}
                                       style={{ width: `${med.confidence_score || 95}%` }}
                                     ></div>
                                   </div>
