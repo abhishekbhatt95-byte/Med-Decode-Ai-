@@ -74,6 +74,12 @@ DROP POLICY IF EXISTS "Users can insert their own documents" ON public.documents
 DROP POLICY IF EXISTS "Users can update their own documents" ON public.documents;
 DROP POLICY IF EXISTS "Users can delete their own documents" ON public.documents;
 
+-- Also drop the new ones if they already exist from manual runs
+DROP POLICY IF EXISTS "documents_select_own" ON public.documents;
+DROP POLICY IF EXISTS "documents_insert_own" ON public.documents;
+DROP POLICY IF EXISTS "documents_update_own" ON public.documents;
+DROP POLICY IF EXISTS "documents_delete_own" ON public.documents;
+
 -- Re-create with strict auth.uid() = user_id (no null escape hatch)
 CREATE POLICY "documents_select_own"
   ON public.documents
@@ -104,6 +110,10 @@ CREATE POLICY "documents_delete_own"
 DROP POLICY IF EXISTS "Users can view analyses for their documents" ON public.analyses;
 DROP POLICY IF EXISTS "Service role can insert analyses" ON public.analyses;
 DROP POLICY IF EXISTS "Users can view extracted text for their documents" ON public.extracted_text;
+
+-- Also drop the new ones if they already exist
+DROP POLICY IF EXISTS "analyses_select_own" ON public.analyses;
+DROP POLICY IF EXISTS "extracted_text_select_own" ON public.extracted_text;
 
 -- Analyses: user sees rows whose parent document belongs to them
 CREATE POLICY "analyses_select_own"
