@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 
 export const UploadPage: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   
   // UI states
   const [dragActive, setDragActive] = useState(false)
@@ -60,11 +60,20 @@ export const UploadPage: React.FC = () => {
     setLoading(true)
     setProgress(5)
 
+    // Guard: anonymous session should always exist by now, but if auth
+    // is still bootstrapping (slow network) this prevents a null crash.
+    if (!user) {
+      setErrorMsg("Session is still loading — please wait a moment and try again.")
+      setLoading(false)
+      setProgress(0)
+      return
+    }
+
     setProgress(10)
 
     try {
       const fileExt = file.name.split('.').pop()
-      const folderName = user!.id
+      const folderName = user.id
       const fileName = `${folderName}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
       
       setProgress(30)
@@ -160,7 +169,13 @@ export const UploadPage: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
+      {/* Upload zone — disabled while auth session is still bootstrapping */}
+      {authLoading ? (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-16 shadow-lg text-center space-y-4 max-w-2xl mx-auto">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-500 font-semibold text-sm">Setting up your secure session…</p>
+        </div>
+      ) : loading ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-16 shadow-lg text-center space-y-6 max-w-2xl mx-auto">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h3 className="text-xl font-bold">Uploading Document...</h3>
