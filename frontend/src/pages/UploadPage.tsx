@@ -60,10 +60,14 @@ export const UploadPage: React.FC = () => {
     setLoading(true)
     setProgress(5)
 
-    // Guard: anonymous session should always exist by now, but if auth
-    // is still bootstrapping (slow network) this prevents a null crash.
+    // Guard: anonymous session should always be set by now. If user is still
+    // null it means signInAnonymously() failed (network error, feature not
+    // enabled in Supabase, etc.). Show a clear message instead of crashing.
     if (!user) {
-      setErrorMsg("Session is still loading — please wait a moment and try again.")
+      setErrorMsg(authLoading
+        ? "Session is still setting up — please wait a moment and try again."
+        : "Could not start a session. Please refresh the page and try again. If the problem persists, make sure Anonymous Sign-ins are enabled in your Supabase project."
+      )
       setLoading(false)
       setProgress(0)
       return

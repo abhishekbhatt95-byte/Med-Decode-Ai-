@@ -64,16 +64,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await fetchProfile(session.user.id)
         setLoading(false)
       } else {
-        // No session — bootstrap an anonymous one
-        const { data, error } = await supabase.auth.signInAnonymously()
-        if (!error && data.session) {
-          setSession(data.session)
-          setUser(data.user)
-          // Anonymous users won't have a profiles row yet; that's fine —
-          // fetchProfile will return null and we just skip it.
-          if (data.user && !data.user.is_anonymous) {
-            await fetchProfile(data.user.id)
+        // No session — bootstrap an anonymous one.
+        // Check data.user (not data.session) because Supabase sometimes
+        // returns the user immediately but delivers the session via
+        // onAuthStateChange a moment later.
+        const tryAnon = async (): Promise<boolean> => {
+          const { data, error } = await supabase.auth.signInAnonymously()
+          if (error) {
+            console.error('Anonymous sign-in failed:', error.message, error)
+            return false
           }
+          if (data.user) {
+            setUser(data.user)
+            setSession(data.session) // may be null; onAuthStateChange fills it in
+            return true
+          }
+          return false
+        }
+
+        const ok = await tryAnon()
+        if (!ok) {
+          // One automatic retry after 1.5 s (handles transient network blips)
+          await new Promise(r => setTimeout(r, 1500))
+          await tryAnon()
         }
         setLoading(false)
       }
