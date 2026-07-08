@@ -1,7 +1,14 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../context/AuthContext'
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
+}
 
 export const UploadPage: React.FC = () => {
   const navigate = useNavigate()
@@ -12,8 +19,16 @@ export const UploadPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const isProcessingRef = useRef(false)
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+    }
+  }, [])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -43,25 +58,29 @@ export const UploadPage: React.FC = () => {
 
 
   const processFile = async (file: File) => {
+    if (isProcessingRef.current) return
+
     setErrorMsg(null)
-    
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png']
+
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif']
     if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.heic')) {
       setErrorMsg("Wrong file type. Only PDF, JPG, PNG, and HEIC are supported.")
       return
     }
 
-    const maxSize = 20 * 1024 * 1024 
+    const maxSize = 20 * 1024 * 1024
     if (file.size > maxSize) {
       setErrorMsg("File too large. Maximum file size is 20MB.")
       return
     }
 
+    isProcessingRef.current = true
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = new AbortController()
+
     setLoading(true)
     setProgress(5)
 
-    
-    
     
     if (!user) {
       setErrorMsg(authLoading
@@ -78,7 +97,8 @@ export const UploadPage: React.FC = () => {
     try {
       const fileExt = file.name.split('.').pop()
       const folderName = user.id
-      const fileName = `${folderName}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+      const uniquePart = generateId().replace(/-/g, '').substring(0, 8)
+      const fileName = `${folderName}/${Date.now()}_${uniquePart}.${fileExt}`
       
       setProgress(30)
       
@@ -135,6 +155,7 @@ export const UploadPage: React.FC = () => {
       }, 500)
 
     } catch (err: any) {
+      if (err?.name === 'AbortError') return
       console.error("Pipeline error:", err)
       setErrorMsg(err?.message || String(err) || "Failed to complete upload pipeline.")
       setProgress(0)
@@ -149,6 +170,8 @@ export const UploadPage: React.FC = () => {
       } catch (logErr) {
         console.error("Failed to log failed upload in database", logErr)
       }
+    } finally {
+      isProcessingRef.current = false
     }
   }
 

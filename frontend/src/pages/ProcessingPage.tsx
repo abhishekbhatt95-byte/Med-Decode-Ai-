@@ -24,17 +24,19 @@ export const ProcessingPage: React.FC = () => {
     }
 
     let intervalId: any
-    let hasInvoked = false
+    const hasInvokedRef = { current: false }
     let pollCount = 0
-    const MAX_POLLS = 45 
+    const MAX_POLLS = 45
+    const abortController = new AbortController()
 
     const triggerAndPoll = async () => {
-      if (!hasInvoked) {
-        hasInvoked = true
+      if (!hasInvokedRef.current) {
+        hasInvokedRef.current = true
         try {
           supabase.functions.invoke('analyze-document', {
-            body: { documentId }
+            body: { documentId },
           }).then(({ data, error }) => {
+            if (abortController.signal.aborted) return
             if (error) {
               console.error("Edge Function invoke error:", error)
             } else {
@@ -42,17 +44,22 @@ export const ProcessingPage: React.FC = () => {
             }
           })
         } catch (err) {
-          console.error("Exception invoking analyze-document:", err)
+          if (!abortController.signal.aborted) {
+            console.error("Exception invoking analyze-document:", err)
+          }
         }
       }
 
       intervalId = setInterval(async () => {
+        if (abortController.signal.aborted) {
+          clearInterval(intervalId)
+          return
+        }
+
         pollCount++
 
-        
         if (pollCount > MAX_POLLS) {
           clearInterval(intervalId)
-          
           await supabase.from('documents').update({ status: 'failed' }).eq('id', documentId).eq('status', 'processing')
           setErrorType('general')
           setCurrentStep('failed')
@@ -65,6 +72,8 @@ export const ProcessingPage: React.FC = () => {
             .select('status, is_medical, name')
             .eq('id', documentId)
             .single()
+
+          if (abortController.signal.aborted) return
 
           if (docErr || !doc) {
             clearInterval(intervalId)
@@ -82,19 +91,21 @@ export const ProcessingPage: React.FC = () => {
 
           if (doc.status === 'failed') {
             clearInterval(intervalId)
-            
+
             const { data: ocrFail } = await supabase
               .from('ocr_failures')
               .select('error_message')
               .eq('document_id', documentId)
               .limit(1)
 
-            if (ocrFail && ocrFail.length > 0) {
-              setErrorType('low-ocr')
-            } else {
-              setErrorType('general')
+            if (!abortController.signal.aborted) {
+              if (ocrFail && ocrFail.length > 0) {
+                setErrorType('low-ocr')
+              } else {
+                setErrorType('general')
+              }
+              setCurrentStep('failed')
             }
-            setCurrentStep('failed')
             return
           }
 
@@ -113,6 +124,8 @@ export const ProcessingPage: React.FC = () => {
             .eq('document_id', documentId)
             .limit(1)
 
+          if (abortController.signal.aborted) return
+
           if (ocrText && ocrText.length > 0) {
             const { data: analysis } = await supabase
               .from('analyses')
@@ -130,7 +143,9 @@ export const ProcessingPage: React.FC = () => {
           }
 
         } catch (e: any) {
-          console.error("Error polling processing status:", e)
+          if (!abortController.signal.aborted) {
+            console.error("Error polling processing status:", e)
+          }
         }
       }, 2000)
     }
@@ -138,6 +153,7 @@ export const ProcessingPage: React.FC = () => {
     triggerAndPoll()
 
     return () => {
+      abortController.abort()
       if (intervalId) clearInterval(intervalId)
     }
   }, [documentId, navigate])
