@@ -249,16 +249,12 @@ serve(async (req) => {
 
     if (userId) {
       const today = new Date().toISOString().split('T')[0]
-      const { data: usageRow, error: usageErr } = await supabase
-        .from('usage')
-        .select('count')
-        .eq('user_id', userId)
-        .eq('date', today)
-        .maybeSingle()
+      const { data: allowed, error: usageErr } = await supabase
+        .rpc('try_increment_daily_usage', { p_user_id: userId, p_date: today, p_cap: 10 })
 
       if (usageErr) {
-        console.error("Failed to query usage limits:", usageErr.message)
-      } else if (usageRow && usageRow.count >= 10) {
+        console.error("Failed to check and increment usage limits:", usageErr.message)
+      } else if (!allowed) {
         return new Response(JSON.stringify({ error: "Daily limit exceeded. Max 10 free analyses per day." }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -676,12 +672,7 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       docType = 'unknown'
     }
 
-    if (userId) {
-      const today = new Date().toISOString().split('T')[0]
-      await supabase.rpc('increment_daily_usage', { p_user_id: userId, p_date: today }).catch((rpcErr: any) => {
-        console.error("RPC increment_daily_usage failed:", rpcErr.message)
-      })
-    }
+
 
     const { error: updateErr } = await supabase.from('documents').update({
       status: 'completed',

@@ -17,7 +17,7 @@ interface AuthContextType {
   isAnonymous: boolean
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
-  upgradeAnonymous: (email: string, password: string, fullName?: string) => Promise<{ error: string | null }>
+  upgradeAnonymous: (email: string, password: string, fullName?: string) => Promise<{ user: User | null; error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -114,16 +114,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false)
   }
 
-  const upgradeAnonymous = async (email: string, password: string, fullName?: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.updateUser({
+  const upgradeAnonymous = async (email: string, password: string, fullName?: string): Promise<{ user: User | null; error: string | null }> => {
+    const { data, error } = await supabase.auth.updateUser({
       email,
       password,
       data: fullName ? { full_name: fullName } : undefined
     })
     if (error) {
-      return { error: error.message }
+      return { user: null, error: error.message }
     }
-    return { error: null }
+    return { user: data.user, error: null }
   }
 
   return (

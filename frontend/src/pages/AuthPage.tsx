@@ -84,15 +84,23 @@ export const AuthPage: React.FC = () => {
 
     try {
       if (isAnonymous) {
-        const { error } = await upgradeAnonymous(sanitizedEmail, password, sanitizedFullName)
+        const { user: updatedUser, error } = await upgradeAnonymous(sanitizedEmail, password, sanitizedFullName)
         if (error) {
           setErrorMsg(error)
         } else {
-          setSuccessMsg("Account created successfully! Your guest history has been saved to your account.")
-          setEmail('')
-          setPassword('')
-          setFullName('')
-          setTimeout(() => navigate({ to: '/dashboard' }), 1500)
+          const isPending = (updatedUser as any)?.new_email || (updatedUser as any)?.unconfirmed_email || updatedUser?.is_anonymous
+          if (isPending) {
+            setSuccessMsg("Check your email to confirm your new account — your history is safely linked and will appear once confirmed.")
+            setEmail('')
+            setPassword('')
+            setFullName('')
+          } else {
+            setSuccessMsg("Account created successfully! Your guest history has been saved to your account.")
+            setEmail('')
+            setPassword('')
+            setFullName('')
+            setTimeout(() => navigate({ to: '/dashboard' }), 1500)
+          }
         }
       } else {
         const { error } = await supabase.auth.signUp({
