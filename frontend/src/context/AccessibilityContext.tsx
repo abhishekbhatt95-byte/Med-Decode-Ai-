@@ -40,21 +40,21 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const root = document.documentElement
     
-    // Large Text class
+    
     if (largeText) {
       root.classList.add('accessibility-large-text')
     } else {
       root.classList.remove('accessibility-large-text')
     }
 
-    // High Contrast class
+    
     if (highContrast) {
       root.classList.add('accessibility-high-contrast')
     } else {
       root.classList.remove('accessibility-high-contrast')
     }
 
-    // Dark Mode class
+    
     if (darkMode) {
       root.classList.add('dark')
     } else {

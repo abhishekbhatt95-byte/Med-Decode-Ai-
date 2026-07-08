@@ -7,17 +7,17 @@ export const ConsentPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
   
-  // Consent checkboxes
+  
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [aiAccepted, setAiAccepted] = useState(false)
   
-  // Page states
+  
   const [submitting, setSubmitting] = useState(false)
   const [checkingConsent, setCheckingConsent] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Check if user has already accepted consent
+  
   useEffect(() => {
     if (loading) return
     if (!user) {
@@ -32,7 +32,7 @@ export const ConsentPage: React.FC = () => {
 
     const verifyConsent = async () => {
       try {
-        // Query legal_acceptances
+        
         const { data: legalData, error: legalErr } = await supabase
           .from('legal_acceptances')
           .select('id')
@@ -40,7 +40,7 @@ export const ConsentPage: React.FC = () => {
           .eq('document_version', 'v1.0')
           .limit(1)
 
-        // Query privacy_consents
+        
         const { data: privacyData, error: privacyErr } = await supabase
           .from('privacy_consents')
           .select('id')
@@ -50,7 +50,7 @@ export const ConsentPage: React.FC = () => {
           .limit(1)
 
         if (!legalErr && !privacyErr && legalData?.length && privacyData?.length) {
-          // Consent already exists, proceed to dashboard
+          
           navigate({ to: '/dashboard' })
         }
       } catch (err) {
@@ -64,7 +64,7 @@ export const ConsentPage: React.FC = () => {
   }, [user, loading, navigate])
 
   const handleDecline = async () => {
-    // Sign out and send back to landing
+    
     await supabase.auth.signOut()
     navigate({ to: '/' })
   }
@@ -86,7 +86,7 @@ export const ConsentPage: React.FC = () => {
     }
 
     try {
-      // 1. Record legal acceptance
+      
       const { error: legalErr } = await supabase
         .from('legal_acceptances')
         .insert({
@@ -96,7 +96,7 @@ export const ConsentPage: React.FC = () => {
 
       if (legalErr) throw new Error(legalErr.message)
 
-      // 2. Record privacy consent
+      
       const { error: privacyErr } = await supabase
         .from('privacy_consents')
         .insert({
@@ -107,7 +107,7 @@ export const ConsentPage: React.FC = () => {
 
       if (privacyErr) throw new Error(privacyErr.message)
 
-      // 3. Record log
+      
       const { error: logErr } = await supabase
         .from('consent_logs')
         .insert({
@@ -119,7 +119,7 @@ export const ConsentPage: React.FC = () => {
 
       if (logErr) throw new Error(logErr.message)
 
-      // Success, route to dashboard
+      
       navigate({ to: '/dashboard' })
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to record consent. Please try again.")
@@ -183,7 +183,7 @@ export const ConsentPage: React.FC = () => {
           </section>
         </div>
 
-        {/* Acceptance checkboxes */}
+        
         <div className="space-y-4 mb-8">
           <label className="flex items-start gap-3 cursor-pointer">
             <input

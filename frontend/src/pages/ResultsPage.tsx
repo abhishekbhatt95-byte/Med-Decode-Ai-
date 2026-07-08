@@ -49,10 +49,10 @@ interface Citation {
   url: string
 }
 
-// Maps a real confidence score to a label/icon/color. Previously the UI
-// always showed "✔️ Excellent" regardless of the actual number — meaning a
-// 20% confidence scan looked identical to a 95% one. This makes the label
-// actually track the score that's now computed for real in the backend.
+
+
+
+
 function getConfidenceDisplay(score: number): { label: string; emoji: string; textClass: string; barClass: string } {
   if (score >= 80) {
     return { label: 'Excellent', emoji: '✔️', textClass: 'text-emerald-500', barClass: 'bg-emerald-500' }
@@ -69,7 +69,7 @@ export const ResultsPage: React.FC = () => {
   const search = useSearch({ from: '/results' }) as SearchParams
   const documentId = search.docId
 
-  // UI state
+  
   const [loading, setLoading] = useState(true)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [medicines, setMedicines] = useState<Medicine[]>([])
@@ -78,13 +78,13 @@ export const ResultsPage: React.FC = () => {
   const [docInfo, setDocInfo] = useState<{ name: string; document_type: string } | null>(null)
   const [confidence, setConfidence] = useState<number | null>(null)
 
-  // Toggle View State (Simple vs Standard)
+  
   const [viewMode, setViewMode] = useState<'simple' | 'medical'>('simple')
 
-  // Text-To-Speech state
+  
   const [speaking, setSpeaking] = useState(false)
 
-  // Copilot Chat State
+  
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string }>>([
     { sender: 'bot', text: "Hello! I am your MedDecode AI Copilot. Ask me any question about your medications, vitals, or clinical findings in this report, and I'll explain them in simple terms." }
   ])
@@ -109,7 +109,7 @@ export const ResultsPage: React.FC = () => {
     const sections = analysis.structured_output?.sections || []
     const abnormalValues = analysis.structured_output?.abnormalValues || []
 
-    // 1. Search in abnormal values
+    
     const matchedAbnormal = abnormalValues.find(av => 
       q.includes(av.parameter.toLowerCase()) || 
       av.parameter.toLowerCase().includes(q)
@@ -118,7 +118,7 @@ export const ResultsPage: React.FC = () => {
       return `For **${matchedAbnormal.parameter}**, the value is **${matchedAbnormal.value}** (reference range: ${matchedAbnormal.referenceRange}). Explanation: ${matchedAbnormal.explanation}`
     }
 
-    // 2. Search in medicines
+    
     const matchedMed = medicines.find(m => 
       q.includes(m.brand_name.toLowerCase()) || 
       m.brand_name.toLowerCase().includes(q) || 
@@ -133,7 +133,7 @@ export const ResultsPage: React.FC = () => {
       return response
     }
 
-    // 3. Search in glossary/sections
+    
     const matchedSec = sections.find(s => 
       q.includes(s.title.toLowerCase()) || 
       s.title.toLowerCase().includes(q)
@@ -246,7 +246,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
 
     const fetchAnalysisData = async () => {
       try {
-        // Fetch document info
+        
         const { data: docData, error: docErr } = await supabase
           .from('documents')
           .select('name, document_type')
@@ -259,7 +259,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           setDocInfo(docData)
         }
 
-        // Fetch analysis record
+        
         const { data: analyses, error: analysisErr } = await supabase
           .from('analyses')
           .select('*')
@@ -283,7 +283,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
 
           if (medsData) {
             setMedicines(medsData as Medicine[])
-            // Expand first medicine by default
+            
             if (medsData.length > 0) {
               setExpandedMedicines({ [medsData[0].id]: true })
             }
@@ -395,7 +395,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
   return (
     <div className="py-8 px-4 max-w-7xl mx-auto space-y-8 print:p-0">
       
-      {/* Guest onboarding banner */}
+      
       {!user && (
         <div className="bg-[#004bb3]/5 border border-[#004bb3]/20 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 print:hidden text-left">
           <div>
@@ -413,7 +413,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
         </div>
       )}
       
-      {/* 1. Header Toolbar */}
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-100 dark:border-slate-800 pb-6 print:hidden">
         <div className="space-y-1 text-left">
           <h1 className="text-3xl md:text-4xl font-extrabold text-[#004bb3] tracking-tight">Your Results Explained</h1>
@@ -429,7 +429,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           </p>
         </div>
         
-        {/* Mockup buttons */}
+        
         <div className="flex flex-wrap gap-2.5">
           <button
             onClick={() => window.print()}
@@ -452,7 +452,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
         </div>
       </div>
 
-      {/* 2. Simple vs Standard Toggle Bar */}
+      
       <div className="flex justify-center print:hidden">
         <div className="bg-slate-100 p-1.5 rounded-full inline-flex border border-slate-200">
           <button
@@ -478,13 +478,13 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
         </div>
       </div>
 
-      {/* 3. Main Split Grid */}
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Column (Span 2): Summary, Primary details, and Chat */}
+        
         <div className="lg:col-span-2 space-y-8 text-left">
           
-          {/* Quick Summary Card */}
+          
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
             <h2 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
               <span className="text-[#004bb3] text-2xl">ℹ️</span> Quick Summary
@@ -507,7 +507,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             </div>
           </div>
 
-          {/* Dynamic Left Column Sections */}
+          
           {(() => {
             const isBloodOrDiagnostic = docType === 'blood_report' || docType === 'diagnostic_report';
             const showMedicinesFirst = medicines.length > 0 && !isBloodOrDiagnostic;
@@ -515,7 +515,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             
             return (
               <>
-                {/* 1. Medicines (If primary focus) */}
+                
                 {showMedicinesFirst && (
                   <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                     <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">
@@ -530,7 +530,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                             key={med.id}
                             className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm"
                           >
-                            {/* Header Row */}
+                            
                             <div 
                               onClick={() => toggleMedicineExpand(med.id)}
                               className="p-5 flex justify-between items-center cursor-pointer select-none hover:bg-slate-50/50"
@@ -551,7 +551,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                               <span className="text-slate-400 text-sm font-bold">{isExpanded ? '▲' : '▼'}</span>
                             </div>
 
-                            {/* Expandable Body */}
+                            
                             {isExpanded && (
                               <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/20 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
@@ -601,7 +601,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                                   </div>
                                 </div>
 
-                                {/* Dosage Instructions subcard */}
+                                
                                 <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 space-y-4">
                                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                                     DOSAGE INSTRUCTIONS
@@ -610,7 +610,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                                     {med.generic_name || "Dosage not specified"}
                                   </h4>
                                   
-                                  {/* Schedule */}
+                                  
                                   <div className="flex flex-wrap gap-3 border-t border-slate-200/50 pt-4 text-xs font-bold">
                                     {(() => {
                                       const { morning, afternoon, night } = getIntakeSchedule(med)
@@ -631,7 +631,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                                   </div>
                                 </div>
 
-                                {/* Scan confidence progress bar */}
+                                
                                 <div className="pt-2">
                                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold mb-1">
                                     <span>RECOGNITION CONFIDENCE</span>
@@ -653,7 +653,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                   </div>
                 )}
 
-                {/* 2. Lab Values / Key Findings (If primary focus) */}
+                
                 {showAbnormalFirst && (
                   <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
                     <h2 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
@@ -690,7 +690,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                   </div>
                 )}
 
-                {/* 3. Detailed Sections / Glossary (If no medicines or abnormal values, or as supplementary content) */}
+                
                 {((medicines.length === 0 && abnormalValues.length === 0) || isBloodOrDiagnostic) && sections.length > 0 && (
                   <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
                     <h2 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
@@ -709,7 +709,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                   </div>
                 )}
 
-                {/* 4. Medicines (Shown secondary if abnormal values took precedence) */}
+                
                 {isBloodOrDiagnostic && medicines.length > 0 && (
                   <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                     <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">
@@ -724,7 +724,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                             key={med.id}
                             className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm"
                           >
-                            {/* Header Row */}
+                            
                             <div 
                               onClick={() => toggleMedicineExpand(med.id)}
                               className="p-5 flex justify-between items-center cursor-pointer select-none hover:bg-slate-50/50"
@@ -745,7 +745,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
                               <span className="text-slate-400 text-sm font-bold">{isExpanded ? '▲' : '▼'}</span>
                             </div>
 
-                            {/* Expandable Body */}
+                            
                             {isExpanded && (
                               <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/20 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
@@ -806,7 +806,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             );
           })()}
 
-          {/* Patient AI Copilot Card */}
+          
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 mt-6 print:hidden">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-4">
               <h2 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
@@ -817,7 +817,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
               </span>
             </div>
 
-            {/* Chat Messages */}
+            
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 flex flex-col gap-2 scrollbar-thin">
               {messages.map((msg, index) => (
                 <div 
@@ -841,7 +841,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
               )}
             </div>
 
-            {/* Suggestions */}
+            
             <div className="space-y-2 pt-2">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Suggested Questions</span>
               <div className="flex flex-wrap gap-2">
@@ -863,7 +863,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
               </div>
             </div>
 
-            {/* Input Form */}
+            
             <form onSubmit={handleSendMessage} className="flex gap-2 pt-2">
               <input
                 type="text"
@@ -884,10 +884,10 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           </div>
         </div>
 
-        {/* Right Column (Span 1): Sidebar details */}
+        
         <div className="space-y-6 text-left">
           
-          {/* Card 1: Abnormal Lab Values (Sidebar fallback if not displayed in main column) */}
+          
           {!(docType === 'blood_report' || docType === 'diagnostic_report' || medicines.length === 0) && abnormalValues.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
@@ -921,7 +921,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             </div>
           )}
 
-          {/* Card 2: Terms Explained Glossary (Sidebar fallback if not detailed in main column) */}
+          
           {(medicines.length > 0 && docType !== 'blood_report' && docType !== 'diagnostic_report') && sections.length > 0 && (
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
@@ -941,7 +941,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             </div>
           )}
 
-          {/* Card 3: Ask Your Doctor */}
+          
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
               🗣️ Ask Your Doctor
@@ -960,7 +960,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
 
       </div>
 
-      {/* Verified sources badges */}
+      
       {citations && citations.length > 0 && (
         <div className="pt-6 w-full text-left print:hidden">
           <span className="text-xs font-bold text-slate-400 block mb-3">Verified Medical Database References:</span>
@@ -980,7 +980,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
         </div>
       )}
 
-      {/* Disclaimers */}
+      
       <footer className="border-t border-slate-100 dark:border-slate-800 pt-6 text-[10px] text-slate-400 w-full text-center space-y-2">
         <p>🔒 Privacy First • Secure Storage • Encrypted Uploads</p>
         <p>This translation is for educational use only. Always consult a physician or clinical professional before editing treatment plans.</p>

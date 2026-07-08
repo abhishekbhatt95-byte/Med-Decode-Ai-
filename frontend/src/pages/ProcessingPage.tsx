@@ -13,7 +13,7 @@ export const ProcessingPage: React.FC = () => {
   const search = useSearch({ from: '/processing' }) as SearchParams
   const documentId = search.docId
 
-  // Pipeline states
+  
   const [currentStep, setCurrentStep] = useState<PipelineStep>('validating')
   const [errorType, setErrorType] = useState<'non-medical' | 'low-ocr' | 'general' | null>(null)
 
@@ -26,7 +26,7 @@ export const ProcessingPage: React.FC = () => {
     let intervalId: any
     let hasInvoked = false
     let pollCount = 0
-    const MAX_POLLS = 45 // 45 × 2s = 90 second timeout
+    const MAX_POLLS = 45 
 
     const triggerAndPoll = async () => {
       if (!hasInvoked) {
@@ -49,10 +49,10 @@ export const ProcessingPage: React.FC = () => {
       intervalId = setInterval(async () => {
         pollCount++
 
-        // Timeout after 90 seconds — force show error
+        
         if (pollCount > MAX_POLLS) {
           clearInterval(intervalId)
-          // Force-fail the document in DB
+          
           await supabase.from('documents').update({ status: 'failed' }).eq('id', documentId).eq('status', 'processing')
           setErrorType('general')
           setCurrentStep('failed')
@@ -143,7 +143,7 @@ export const ProcessingPage: React.FC = () => {
   }, [documentId, navigate])
 
 
-  // Map progress index to steps Order
+  
   const getStepStatus = (step: 'upload' | 'reading' | 'understanding' | 'results') => {
     if (currentStep === 'failed') return 'pending'
     
@@ -168,7 +168,7 @@ export const ProcessingPage: React.FC = () => {
     return 'pending'
   }
 
-  // --- 1. FAILURE STATE COMPLYING TO MOCKUP 5 ---
+  
   if (currentStep === 'failed') {
     return (
       <div className="py-12 px-4 max-w-6xl mx-auto space-y-12">
@@ -180,7 +180,7 @@ export const ProcessingPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto w-full">
-          {/* Card 1: Non-Medical */}
+          
           <div className={`border rounded-[32px] p-8 text-center flex flex-col justify-between items-center bg-white shadow-md min-h-[460px] w-full transition-all duration-300 ${
             errorType === 'non-medical'
               ? 'border-[#004bb3] ring-4 ring-[#004bb3]/10 scale-105 shadow-xl'
@@ -213,7 +213,7 @@ export const ProcessingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Blurry OCR */}
+          
           <div className={`border rounded-[32px] p-8 text-center flex flex-col justify-between items-center bg-white shadow-md min-h-[460px] w-full transition-all duration-300 ${
             errorType === 'low-ocr'
               ? 'border-[#004bb3] ring-4 ring-[#004bb3]/10 scale-105 shadow-xl'
@@ -246,7 +246,7 @@ export const ProcessingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 3: Server/General Error */}
+          
           <div className={`border rounded-[32px] p-8 text-center flex flex-col justify-between items-center bg-white shadow-md min-h-[460px] w-full transition-all duration-300 ${
             errorType === 'general'
               ? 'border-[#004bb3] ring-4 ring-[#004bb3]/10 scale-105 shadow-xl'
@@ -283,7 +283,7 @@ export const ProcessingPage: React.FC = () => {
     )
   }
 
-  // --- 2. ACTIVE PROGRESS PIPELINE COMPLYING TO MOCKUP 1 ---
+  
   const uploadStatus = getStepStatus('upload')
   const readingStatus = getStepStatus('reading')
   const understandingStatus = getStepStatus('understanding')
@@ -292,12 +292,12 @@ export const ProcessingPage: React.FC = () => {
   return (
     <div className="py-12 px-4 max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[70vh] space-y-12">
       
-      {/* Dynamic Stepper Progress */}
+      
       <div className="flex w-full max-w-2xl justify-between items-center relative px-2">
-        {/* Horizontal bar backdrops */}
+        
         <div className="absolute top-5 left-8 right-8 h-0.5 bg-slate-100 dark:bg-slate-800 -z-10"></div>
         
-        {/* Step 1: Upload */}
+        
         <div className="flex flex-col items-center space-y-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm border font-bold ${
             uploadStatus === 'completed' || uploadStatus === 'active'
@@ -311,7 +311,7 @@ export const ProcessingPage: React.FC = () => {
           }`}>Upload</span>
         </div>
 
-        {/* Step 2: Reading File */}
+        
         <div className="flex flex-col items-center space-y-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm border font-bold ${
             readingStatus === 'completed' 
@@ -327,7 +327,7 @@ export const ProcessingPage: React.FC = () => {
           }`}>Reading File</span>
         </div>
 
-        {/* Step 3: Understanding Report */}
+        
         <div className="flex flex-col items-center space-y-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm border font-bold ${
             understandingStatus === 'completed'
@@ -343,7 +343,7 @@ export const ProcessingPage: React.FC = () => {
           }`}>Understanding Report</span>
         </div>
 
-        {/* Step 4: Results Ready */}
+        
         <div className="flex flex-col items-center space-y-2">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm border font-bold ${
             resultsStatus === 'completed' || resultsStatus === 'active'
@@ -358,7 +358,7 @@ export const ProcessingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Blue Glow Graphic Scanner */}
+      
       <div className="relative flex items-center justify-center w-48 h-48">
         <div className="absolute inset-0 bg-[#004bb3]/5 rounded-full blur-3xl scale-125 animate-pulse"></div>
         <div className="w-24 h-24 rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl flex items-center justify-center text-4xl text-[#004bb3] border-[#004bb3]/20 relative">
@@ -367,7 +367,7 @@ export const ProcessingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Titles and descriptions */}
+      
       <div className="text-center space-y-3">
         <h1 className="text-3xl md:text-4xl font-extrabold text-[#004bb3] tracking-tight">
           Analyzing your document...

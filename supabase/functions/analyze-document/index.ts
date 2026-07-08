@@ -16,7 +16,7 @@ function maskPII(text: string): string {
   return masked
 }
 
-// Fetch with a timeout
+
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -31,10 +31,10 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// Fetch with Retry (handles 429 and 503 errors with exponential backoff)
+
 async function fetchWithRetry(url: string, options: RequestInit, timeoutMs: number, maxRetries = 3): Promise<Response> {
   let attempt = 0
-  let delay = 2000 // 2 seconds initial delay
+  let delay = 2000 
   
   while (attempt < maxRetries) {
     try {
@@ -61,11 +61,11 @@ async function fetchWithRetry(url: string, options: RequestInit, timeoutMs: numb
     }
   }
   
-  // Final attempt if retries exhausted
+  
   return fetchWithTimeout(url, options, timeoutMs)
 }
 
-// Run OCR using OCR.space with a specific OCREngine
+
 async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engine: string): Promise<{ text: string; ocrExitCode: number | null }> {
   const formData = new FormData()
   formData.append('url', fileUrl)
@@ -82,7 +82,7 @@ async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engi
   const ocrResponse = await fetchWithTimeout(
     'https://api.ocr.space/parse/image',
     { method: 'POST', headers: { 'apikey': ocrSpaceKey }, body: formData },
-    30000 // 30 second timeout
+    30000 
   )
 
   const ocrText = await ocrResponse.text()
@@ -149,16 +149,16 @@ function cleanAndParseJson(text: string): any {
   return JSON.parse(cleaned);
 }
 
-// Converts Gemini's self-rated "high"/"medium"/"low" confidence (instruction 7
-// in the prompt) into a 0-100 score. Replaces the old hardcoded 95.0/98.0
-// constants — every document used to get the exact same fake number
-// regardless of how legible the source actually was.
+
+
+
+
 function confidenceLabelToScore(label: any): number {
   switch (String(label || '').toLowerCase().trim()) {
     case 'high': return 95
     case 'medium': return 70
     case 'low': return 40
-    default: return 50 // Gemini didn't return a usable label — treat as genuinely uncertain, not "excellent"
+    default: return 50 
   }
 }
 
@@ -174,7 +174,7 @@ serve(async (req) => {
   let documentId: string | null = null
 
   try {
-    // 1. Sanitize and validate request payload size
+    
     const contentLength = req.headers.get('content-length')
     if (contentLength && parseInt(contentLength, 10) > 1000) {
       return new Response(JSON.stringify({ error: "Payload too large. Limit is 1KB." }), {
@@ -183,7 +183,7 @@ serve(async (req) => {
       })
     }
 
-    // 2. Validate JSON format
+    
     let body: any
     try {
       body = await req.json()
@@ -194,7 +194,7 @@ serve(async (req) => {
       })
     }
 
-    // 3. Validate documentId format (UUID regex)
+    
     documentId = body?.documentId
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!documentId || typeof documentId !== 'string' || !uuidRegex.test(documentId)) {
@@ -204,7 +204,7 @@ serve(async (req) => {
       })
     }
 
-    // 4. Resolve client IP and auth user
+    
     const clientIp = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown'
     const authHeader = req.headers.get('Authorization')
     let userId: string | null = null
@@ -213,10 +213,10 @@ serve(async (req) => {
         const token = authHeader.replace('Bearer ', '')
         const { data: { user } } = await supabase.auth.getUser(token)
         userId = user?.id || null
-      } catch (_) { /* ignore invalid token */ }
+      } catch (_) {  }
     }
 
-    // 5. Rate limit check: max 5 requests per 15 minutes per IP/User
+    
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     let query = supabase
       .from('request_logs')
@@ -240,14 +240,14 @@ serve(async (req) => {
       })
     }
 
-    // 6. Log request
+    
     await supabase.from('request_logs').insert({
       ip_address: clientIp,
       user_id: userId,
       endpoint: 'analyze-document'
     })
 
-    // 1. Fetch Document Info
+    
     const { data: document, error: docErr } = await supabase
       .from('documents')
       .select('*')
@@ -258,15 +258,15 @@ serve(async (req) => {
       throw new Error(`Failed to fetch document: ${docErr?.message || 'Not found'}`)
     }
 
-    // Update status to processing
+    
     await supabase.from('documents').update({ status: 'processing' }).eq('id', documentId)
 
-    // Delete any existing OCR results, extracted text, and analyses for this document to prevent duplicate entries
+    
     await supabase.from('analyses').delete().eq('document_id', documentId)
     await supabase.from('extracted_text').delete().eq('document_id', documentId)
     await supabase.from('ocr_results').delete().eq('document_id', documentId)
 
-    // 2. Create a signed URL (no download needed - OCR.space fetches it directly)
+    
     const { data: signedUrlData, error: signedUrlErr } = await supabase.storage
       .from('Med Decode Ai')
       .createSignedUrl(document.file_path, 300)
@@ -281,7 +281,7 @@ serve(async (req) => {
 
     console.log(`Processing: ${document.name} (${isPdf ? 'PDF' : 'image'})`)
 
-    // Pre-fetch file contents for multimodal vision input if size < 21MB
+    
     let base64Data = ""
     let includeFile = false
     const sizeInMb = document.size / (1024 * 1024)
@@ -315,7 +315,7 @@ serve(async (req) => {
       console.log(`File size (${sizeInMb.toFixed(2)} MB) is 21MB or larger. Skipping inline file transmission.`)
     }
 
-    // 3. OCR via OCR.space (with 30s timeout)
+    
     let extractedText = ""
     let ocrExitCode: number | null = null
     let usedFallbackEngine = false
@@ -328,7 +328,7 @@ serve(async (req) => {
     const ocrSpaceKey = configuredOcrKey || 'helloworld'
 
     try {
-      // Try Engine 3 first as it is designed for high-accuracy and handwriting (doctor prescriptions)
+      
       try {
         const engine3Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '3')
         extractedText = engine3Result.text
@@ -336,7 +336,7 @@ serve(async (req) => {
         console.log(`OCR Engine 3 succeeded. Text length: ${extractedText.length}`)
       } catch (engine3Err: any) {
         console.warn(`OCR Engine 3 failed: ${engine3Err.message}. Falling back to Engine 1...`)
-        // Fallback to Engine 1 (standard speed/printed engine)
+        
         const engine1Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '1')
         extractedText = engine1Result.text
         ocrExitCode = engine1Result.ocrExitCode
@@ -357,21 +357,21 @@ serve(async (req) => {
       }
     }
 
-    // Heuristic OCR confidence: OCR.space does not return a numeric confidence
-    // score anywhere in its response — only an OCRExitCode (1=success,
-    // 2=partial success, 3/4=failure). This maps that signal, plus whether we
-    // had to fall back to the non-handwriting-tuned Engine 1, and whether we
-    // got any usable text at all, onto a 0-100 estimate. It's a heuristic
-    // standing in for a real measurement OCR.space simply doesn't provide —
-    // not a precise number, and the code/comments should keep saying so.
+    
+    
+    
+    
+    
+    
+    
     function computeOcrConfidence(): number {
-      if (!extractedText) return 20 // no OCR text at all; relying purely on Gemini's own vision read
+      if (!extractedText) return 20 
       let score = ocrExitCode === 1 ? 90 : ocrExitCode === 2 ? 65 : 35
-      if (usedFallbackEngine) score -= 10 // the handwriting-tuned engine couldn't handle it
+      if (usedFallbackEngine) score -= 10 
       return Math.max(0, Math.min(100, score))
     }
 
-    // Save extracted text (if we got any)
+    
     if (extractedText) {
       await supabase.from('extracted_text').insert({
         document_id: documentId,
@@ -388,7 +388,7 @@ serve(async (req) => {
       })
     }
 
-    // 4. AI Analysis using Google Gemini (multimodal)
+    
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
     if (!geminiApiKey) throw new Error("GEMINI_API_KEY not configured")
 
@@ -553,7 +553,7 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
     console.log("Parsed Gemini analysis:", JSON.stringify(rawAnalysis, null, 2))
 
 
-    // 5. Non-medical rejection
+    
     if (rawAnalysis.isMedical === false) {
       await supabase.from('documents').update({ is_medical: false, status: 'failed' }).eq('id', documentId)
       return new Response(JSON.stringify({ success: true, isMedical: false }), {
@@ -561,7 +561,7 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       })
     }
 
-    // 6. Save results
+    
     const { data: analysisData, error: analysisErr } = await supabase
       .from('analyses')
       .insert({
@@ -607,12 +607,12 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       console.log("No medicines were extracted in rawAnalysis.medicines.")
     }
 
-    // Real confidence scoring, replacing the old hardcoded 90/98/94 constants
-    // that every document received regardless of how mangled the input was.
-    // ocrConfidence: heuristic from OCR.space's exit code (see computeOcrConfidence above).
-    // aiConfidence: Gemini's own self-rated overallConfidence from prompt instruction 7.
-    // overall: weighted toward the AI score, since Gemini's multimodal vision read still
-    // contributes meaningfully even when OCR text is weak or missing entirely.
+    
+    
+    
+    
+    
+    
     const ocrConfidenceScore = computeOcrConfidence()
     const aiConfidenceScore = confidenceLabelToScore(rawAnalysis.overallConfidence)
     const overallConfidenceScore = Math.round(ocrConfidenceScore * 0.4 + aiConfidenceScore * 0.6)
@@ -624,8 +624,8 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       overall_confidence: overallConfidenceScore
     })
 
-    // Flag genuinely low-confidence analyses for manual review instead of
-    // silently presenting a guess with the same visual weight as a clean read.
+    
+    
     if (overallConfidenceScore < 60) {
       const { error: flagErr } = await supabase.from('review_flags').insert({
         analysis_id: analysisData.id,
@@ -671,14 +671,14 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
   } catch (err: any) {
     console.error("Edge Function error:", err.message)
 
-    // Always try to update document status to failed
+    
     if (documentId) {
       try {
         await supabase.from('documents')
           .update({ status: 'failed' })
           .eq('id', documentId)
           .in('status', ['processing', 'uploaded'])
-      } catch (_) { /* ignore */ }
+      } catch (_) {  }
     }
 
     return new Response(JSON.stringify({ error: err.message }), {

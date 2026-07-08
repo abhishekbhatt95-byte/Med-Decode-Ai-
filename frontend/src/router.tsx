@@ -18,7 +18,7 @@ import { ResultsPage } from './pages/ResultsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
-// Global Root Layout Component
+
 const RootLayout = () => {
   const { user, signOut } = useAuth()
   const { largeText, highContrast, darkMode, setLargeText, setHighContrast, setDarkMode } = useAccessibility()
@@ -26,7 +26,7 @@ const RootLayout = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
-      {/* Accessibility Floating Control Bar */}
+      
       <div className="bg-muted border-b border-border px-4 py-2 text-xs md:text-sm flex flex-wrap justify-between items-center gap-2">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-muted-foreground">Accessibility Controls:</span>
@@ -62,7 +62,7 @@ const RootLayout = () => {
         </div>
       </div>
 
-      {/* Main Navigation Bar */}
+      
       <header className="border-b border-border bg-card/50 backdrop-blur sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link to="/" className="text-2xl font-bold text-foreground hover:opacity-90 flex items-center gap-2">
@@ -108,12 +108,12 @@ const RootLayout = () => {
         </div>
       </header>
 
-      {/* Main Page Content */}
+      
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
         <Outlet />
       </main>
 
-      {/* Trust & Transparency Footer */}
+      
       <footer className="border-t border-border bg-card/30 py-12 px-4 mt-auto">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 text-center md:text-left">
           <div className="max-w-md">
@@ -147,7 +147,7 @@ const RootLayout = () => {
   )
 }
 
-// Route Configurations
+
 const rootRoute = createRootRoute({
   component: RootLayout,
 })
@@ -200,14 +200,14 @@ const profileRoute = createRoute({
   component: ProfilePage,
 })
 
-// Catch-all route for 404
+
 const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '*',
   component: NotFoundPage,
 })
 
-// Build the Route Tree
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
@@ -220,7 +220,7 @@ const routeTree = rootRoute.addChildren([
   notFoundRoute,
 ])
 
-// Create and export the Router instance
+
 export const router = createRouter({ routeTree })
 
 declare module '@tanstack/react-router' {

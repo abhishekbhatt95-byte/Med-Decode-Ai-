@@ -5,9 +5,9 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className="flex flex-col space-y-0">
-      {/* 1. Hero Split Section */}
+      
       <section className="max-w-6xl mx-auto w-full px-4 py-16 md:py-24 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-        {/* Left Column */}
+        
         <div className="space-y-8 text-left">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white leading-[1.15] tracking-tight">
             Confused By Your Medical Report? We'll Explain It Simply.
@@ -39,10 +39,10 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Visual Mockup Placeholder Card */}
+        
         <div className="flex justify-center items-center w-full">
           <div className="w-full max-w-[450px] aspect-[4/5] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-2xl relative overflow-hidden p-8 flex flex-col justify-between animate-float">
-            {/* Design accents to mimic a mock report illustration */}
+            
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <div className="w-1/3 h-4 bg-slate-100 dark:bg-slate-800 rounded"></div>
@@ -63,7 +63,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. How It Works Section (Full Width Dark Background) */}
+      
       <section className="bg-[#1e2025] text-white py-20 px-4 w-full">
         <div className="max-w-6xl mx-auto w-full">
           <div className="text-center mb-16">
@@ -72,7 +72,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Step 1 */}
+            
             <div className="bg-[#2a2d34] border border-slate-700/30 rounded-3xl p-8 flex flex-col items-center text-center shadow-md">
               <div className="w-16 h-16 rounded-full bg-[#004bb3]/20 text-[#004bb3] flex items-center justify-center text-2xl mb-6 font-bold">
                 📄
@@ -83,7 +83,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Step 2 */}
+            
             <div className="bg-[#2a2d34] border border-slate-700/30 rounded-3xl p-8 flex flex-col items-center text-center shadow-md">
               <div className="w-16 h-16 rounded-full bg-[#004bb3]/20 text-[#004bb3] flex items-center justify-center text-2xl mb-6 font-bold">
                 🌱
@@ -94,7 +94,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Step 3 */}
+            
             <div className="bg-[#2a2d34] border border-slate-700/30 rounded-3xl p-8 flex flex-col items-center text-center shadow-md">
               <div className="w-16 h-16 rounded-full bg-[#004bb3]/20 text-[#004bb3] flex items-center justify-center text-2xl mb-6 font-bold">
                 💡

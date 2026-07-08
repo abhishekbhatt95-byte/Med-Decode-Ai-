@@ -5,11 +5,7 @@ interface OCRResult {
   confidence: number
 }
 
-/**
- * Performs client-side/offline OCR scanning using Tesseract.js
- * @param file The image file (Blob/File) to read
- * @param onProgress Callback to track percentage progress (0 to 100)
- */
+
 export async function performLocalOCR(
   file: File, 
   onProgress?: (progress: number) => void

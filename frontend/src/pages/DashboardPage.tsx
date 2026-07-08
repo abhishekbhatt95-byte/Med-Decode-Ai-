@@ -17,7 +17,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   
-  // State variables
+  
   const [documents, setDocuments] = useState<Document[]>([])
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -50,7 +50,7 @@ export const DashboardPage: React.FC = () => {
 
     fetchDocuments()
 
-    // Subscribe to realtime updates for document status changes
+    
     const channel = supabase
       .channel('document-status-changes')
       .on(
@@ -68,19 +68,19 @@ export const DashboardPage: React.FC = () => {
   }, [user, authLoading, navigate])
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent row click navigation
+    e.stopPropagation() 
     const confirm = window.confirm("Are you sure you want to permanently delete this document and its analysis records? This meets your DPDP deletion request rights.")
     if (!confirm) return
 
     try {
-      // Create deletion requests logs
+      
       await supabase.from('data_deletion_requests').insert({
         user_id: user?.id,
         status: 'completed',
         completed_at: new Date().toISOString()
       })
 
-      // Delete document (cascade rules will delete extracted_text and analyses)
+      
       const { error } = await supabase
         .from('documents')
         .delete()
@@ -88,14 +88,14 @@ export const DashboardPage: React.FC = () => {
 
       if (error) throw error
 
-      // Refresh list
+      
       setDocuments(prev => prev.filter(doc => doc.id !== id))
     } catch (err: any) {
       alert(`Deletion failed: ${err.message}`)
     }
   }
 
-  // Formatting utilities
+  
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
@@ -114,14 +114,14 @@ export const DashboardPage: React.FC = () => {
     })
   }
 
-  // Filter and search logic
+  
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
     if (activeFilter === 'all') return matchesSearch
     return matchesSearch && doc.document_type === activeFilter
   })
 
-  // Group filters
+  
   const filterOptions = [
     { key: 'all', label: 'All Files' },
     { key: 'prescription', label: 'Prescriptions' },
@@ -143,7 +143,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="py-6 px-4 max-w-6xl mx-auto space-y-8">
       
-      {/* Dashboard Top Banner */}
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-extrabold text-foreground">Welcome Back</h1>
@@ -157,9 +157,9 @@ export const DashboardPage: React.FC = () => {
         </Link>
       </div>
 
-      {/* Search & Filter Toolbar */}
+      
       <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch">
-        {/* Search Input */}
+        
         <div className="flex-1 max-w-md relative">
           <input
             type="text"
@@ -170,7 +170,7 @@ export const DashboardPage: React.FC = () => {
           />
         </div>
         
-        {/* Filter Badges */}
+        
         <div className="flex flex-wrap gap-2 items-center">
           {filterOptions.map(opt => (
             <button
@@ -188,7 +188,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Document History Table / List */}
+      
       {filteredDocuments.length === 0 ? (
         <div className="bg-card border border-border border-dashed rounded-2xl p-16 text-center text-muted-foreground shadow-sm">
           <span className="text-5xl mb-4 block">📁</span>
@@ -259,13 +259,13 @@ export const DashboardPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
-                  {/* Status Indicator */}
+                  
                   <span className={`border px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${statusBadge}`}>
                     <span>{icon}</span>
                     <span>{statusLabel}</span>
                   </span>
 
-                  {/* Actions */}
+                  
                   <button
                     onClick={(e) => handleDelete(doc.id, e)}
                     className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all cursor-pointer"
@@ -280,7 +280,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Trust foot banner */}
+      
       <div className="text-center text-xs text-muted-foreground pt-4">
         🔒 All files and extracted medical analysis records are fully encrypted and private to your account.
       </div>

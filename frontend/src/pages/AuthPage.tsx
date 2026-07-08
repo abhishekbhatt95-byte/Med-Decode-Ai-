@@ -10,30 +10,30 @@ export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  // Auth state variables
+  
   const [mode, setMode] = useState<AuthMode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   
-  // UI states
+  
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Redirect if user is already signed in
+  
   React.useEffect(() => {
     if (user) {
       navigate({ to: '/dashboard' })
     }
   }, [user, navigate])
 
-  // Helper to sanitize inputs (remove HTML tags)
+  
   const sanitize = (val: string) => {
     return val.replace(/<[^>]*>/g, '').trim()
   }
 
-  // Helper to check rate limit and record attempt
+  
   const enforceRateLimit = (): boolean => {
     const rateLimit = checkAuthRateLimit()
     if (!rateLimit.allowed) {
@@ -177,7 +177,7 @@ export const AuthPage: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-[70vh] py-12 px-4">
       <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl p-8 md:p-10">
         
-        {/* Toggle Mode Headers */}
+        
         {mode !== 'forgot' && (
           <div className="flex border-b border-border mb-8">
             <button
@@ -224,7 +224,7 @@ export const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {/* Message banners */}
+        
         {errorMsg && (
           <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-xl p-4 mb-6 text-sm font-semibold">
             ⚠️ {errorMsg}
@@ -237,9 +237,9 @@ export const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {/* FORM INJECTS */}
+        
 
-        {/* Sign In Form */}
+        
         {mode === 'signin' && (
           <form onSubmit={handleSignIn} className="space-y-6">
             <div>
@@ -294,7 +294,7 @@ export const AuthPage: React.FC = () => {
           </form>
         )}
 
-        {/* Magic Link Form */}
+        
         {mode === 'magiclink' && (
           <form onSubmit={handleMagicLink} className="space-y-6">
             <div>
@@ -329,7 +329,7 @@ export const AuthPage: React.FC = () => {
           </form>
         )}
 
-        {/* Sign Up Form */}
+        
         {mode === 'signup' && (
           <form onSubmit={handleSignUp} className="space-y-6">
             <div>
@@ -376,7 +376,7 @@ export const AuthPage: React.FC = () => {
           </form>
         )}
 
-        {/* Forgot Password Form */}
+        
         {mode === 'forgot' && (
           <form onSubmit={handleForgotPassword} className="space-y-6">
             <div>

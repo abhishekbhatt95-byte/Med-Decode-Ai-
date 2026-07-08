@@ -55,8 +55,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   useEffect(() => {
-    // Get initial session; if none exists, sign in anonymously so every
-    // visitor has a real auth.uid() — enabling strict, uniform RLS policies.
+    
+    
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         setSession(session)
@@ -64,10 +64,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await fetchProfile(session.user.id)
         setLoading(false)
       } else {
-        // No session — bootstrap an anonymous one.
-        // Check data.user (not data.session) because Supabase sometimes
-        // returns the user immediately but delivers the session via
-        // onAuthStateChange a moment later.
+        
+        
+        
+        
         const tryAnon = async (): Promise<boolean> => {
           const { data, error } = await supabase.auth.signInAnonymously()
           if (error) {
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           if (data.user) {
             setUser(data.user)
-            setSession(data.session) // may be null; onAuthStateChange fills it in
+            setSession(data.session) 
             return true
           }
           return false
@@ -84,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const ok = await tryAnon()
         if (!ok) {
-          // One automatic retry after 1.5 s (handles transient network blips)
+          
           await new Promise(r => setTimeout(r, 1500))
           await tryAnon()
         }
@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })
 
-    // Listen for auth changes (sign-in, sign-out, token refresh, linking)
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         setSession(newSession)

@@ -7,7 +7,7 @@ export const UploadPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   
-  // UI states
+  
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -51,7 +51,7 @@ export const UploadPage: React.FC = () => {
       return
     }
 
-    const maxSize = 20 * 1024 * 1024 // 20MB
+    const maxSize = 20 * 1024 * 1024 
     if (file.size > maxSize) {
       setErrorMsg("File too large. Maximum file size is 20MB.")
       return
@@ -60,9 +60,9 @@ export const UploadPage: React.FC = () => {
     setLoading(true)
     setProgress(5)
 
-    // Guard: anonymous session should always be set by now. If user is still
-    // null it means signInAnonymously() failed (network error, feature not
-    // enabled in Supabase, etc.). Show a clear message instead of crashing.
+    
+    
+    
     if (!user) {
       setErrorMsg(authLoading
         ? "Session is still setting up — please wait a moment and try again."
@@ -173,7 +173,7 @@ export const UploadPage: React.FC = () => {
         </div>
       )}
 
-      {/* Upload zone — disabled while auth session is still bootstrapping */}
+      
       {authLoading ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-16 shadow-lg text-center space-y-4 max-w-2xl mx-auto">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -233,7 +233,7 @@ export const UploadPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Badges for document types */}
+          
           <div className="flex flex-wrap justify-center gap-3">
             <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold px-4 py-2 rounded-full text-xs">
               📝 Prescription
@@ -246,7 +246,7 @@ export const UploadPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Footer security badges */}
+          
           <div className="grid grid-cols-3 gap-4 border-t border-slate-100 dark:border-slate-800 pt-6 text-center text-[10px] md:text-xs font-semibold text-slate-400">
             <div className="flex flex-col items-center gap-1">
               <span>🔒</span>

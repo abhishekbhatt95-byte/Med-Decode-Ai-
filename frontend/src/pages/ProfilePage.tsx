@@ -9,7 +9,7 @@ export const ProfilePage: React.FC = () => {
   const { user, profile, refreshProfile, signOut } = useAuth()
   const { largeText, highContrast, darkMode, setLargeText, setHighContrast, setDarkMode } = useAccessibility()
   
-  // Update states
+  
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [updating, setUpdating] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -39,11 +39,11 @@ export const ProfilePage: React.FC = () => {
     }
   }
 
-  // DPDP compliant Export Data feature
+  
   const handleExportData = async () => {
     if (!user) return
     try {
-      // Fetch documents and analyses
+      
       const { data: docs } = await supabase
         .from('documents')
         .select('*, extracted_text(*), analyses(*, medicines(*))')
@@ -73,21 +73,21 @@ export const ProfilePage: React.FC = () => {
     }
   }
 
-  // Wipes all user document entries and storage files
+  
   const handleClearDocuments = async () => {
     if (!user) return
     const confirm = window.confirm("Are you sure you want to delete all your uploaded documents and simplified analysis records? This action is permanent.")
     if (!confirm) return
 
     try {
-      // Log data deletion request
+      
       await supabase.from('data_deletion_requests').insert({
         user_id: user.id,
         status: 'completed',
         completed_at: new Date().toISOString()
       })
 
-      // Delete all documents (cascade will clean up analyses, medicines, text, etc.)
+      
       const { error } = await supabase
         .from('documents')
         .delete()
@@ -100,21 +100,21 @@ export const ProfilePage: React.FC = () => {
     }
   }
 
-  // Full Account Deletion (compliance check)
+  
   const handleDeleteAccount = async () => {
     if (!user) return
     const confirm = window.confirm("WARNING: This will permanently delete your account, settings, and all uploaded medical records. This meets your GDPR/DPDP Right to Be Forgotten. Do you want to proceed?")
     if (!confirm) return
 
     try {
-      // 1. Log deletion request
+      
       await supabase.from('data_deletion_requests').insert({
         user_id: user.id,
         status: 'completed',
         completed_at: new Date().toISOString()
       })
 
-      // 2. Wipe profile & files (handled by cascade triggers in DB)
+      
       const { error: profileErr } = await supabase
         .from('profiles')
         .delete()
@@ -122,7 +122,7 @@ export const ProfilePage: React.FC = () => {
 
       if (profileErr) throw profileErr
 
-      // 3. Wipes auth session
+      
       await signOut()
       navigate({ to: '/' })
       alert("Your account and data have been fully deleted.")
@@ -148,7 +148,7 @@ export const ProfilePage: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Account Details Form */}
+      
       <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">👤 Personal Information</h2>
         <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -182,7 +182,7 @@ export const ProfilePage: React.FC = () => {
         </form>
       </section>
 
-      {/* 2. Global Accessibility Controls */}
+      
       <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">👓 Accessibility & Themes</h2>
         <div className="space-y-5">
@@ -227,7 +227,7 @@ export const ProfilePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. Privacy & Compliance Actions */}
+      
       <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">🛡️ Data Management & DPDP Rights</h2>
         <div className="space-y-4">
