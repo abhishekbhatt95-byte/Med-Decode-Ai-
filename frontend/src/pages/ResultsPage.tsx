@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearch, Link } from '@tanstack/react-router'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 
 interface SearchParams {
   docId: string
@@ -88,15 +89,55 @@ export const ResultsPage: React.FC = () => {
   
   const [viewMode, setViewMode] = useState<'simple' | 'medical'>('simple')
 
-  
   const [speaking, setSpeaking] = useState(false)
+  const [speakingText, setSpeakingText] = useState<string | null>(null)
 
-  
+  const { isListening, transcript, startListening, stopListening, isSupported: isVoiceSupported } = useVoiceInput()
+  const [showVoiceConsent, setShowVoiceConsent] = useState(() => {
+    return localStorage.getItem('meddecode-voice-consent') !== 'accepted'
+  })
+
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string }>>([
     { sender: 'bot', text: "Hello! I am your MedDecode AI Copilot. Ask me any question about your medications, vitals, or clinical findings in this report, and I'll explain them in simple terms." }
   ])
   const [inputVal, setInputVal] = useState("")
   const [copilotLoading, setCopilotLoading] = useState(false)
+
+  useEffect(() => {
+    if (transcript) {
+      setInputVal(prev => prev + (prev ? ' ' : '') + transcript)
+    }
+  }, [transcript])
+
+  const handleSpeakText = (text: string) => {
+    if (speakingText === text) {
+      window.speechSynthesis.cancel()
+      setSpeakingText(null)
+      return
+    }
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.onend = () => setSpeakingText(null)
+    utterance.onerror = () => setSpeakingText(null)
+    setSpeakingText(text)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const handleMicClick = () => {
+    if (!isVoiceSupported) return;
+    if (showVoiceConsent) return;
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  const acceptVoiceConsent = () => {
+    localStorage.setItem("meddecode-voice-consent", "accepted");
+    setShowVoiceConsent(false);
+    startListening();
+  };
 
   const getIntakeSchedule = (med: Medicine) => {
     const text = `${med.brand_name} ${med.generic_name || ''} ${med.category || ''} ${med.common_uses || ''} ${med.how_it_works || ''} ${med.precautions || ''} ${med.food_restrictions || ''}`.toLowerCase()
@@ -895,16 +936,35 @@ export const ResultsPage: React.FC = () => {
             
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 flex flex-col gap-2 scrollbar-thin">
               {messages.map((msg, index) => (
-                <div 
+                <div
                   key={index}
-                  className={`max-w-[85%] rounded-2xl p-4 text-sm font-semibold leading-relaxed transition-all ${
-                    msg.sender === 'user' 
-                      ? 'bg-[#004bb3] text-white self-end rounded-tr-none' 
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 self-start rounded-tl-none'
+                  className={`flex items-start gap-2 max-w-[85%] ${
+                    msg.sender === 'user' ? 'self-end flex-row-reverse' : 'self-start'
                   }`}
-                  style={{ whiteSpace: 'pre-wrap' }}
                 >
-                  {msg.text}
+                  <div
+                    className={`rounded-2xl p-4 text-sm font-semibold leading-relaxed transition-all ${
+                      msg.sender === 'user'
+                        ? 'bg-[#004bb3] text-white rounded-tr-none'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-none'
+                    }`}
+                    style={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {msg.text}
+                  </div>
+                  {msg.sender === 'bot' && (
+                    <button
+                      onClick={() => handleSpeakText(msg.text)}
+                      className={`p-2 rounded-full border text-xs cursor-pointer transition-all shrink-0 mt-2 ${
+                        speakingText === msg.text
+                          ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 text-red-500 hover:bg-red-100'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                      }`}
+                      title={speakingText === msg.text ? "Stop reading" : "Read aloud"}
+                    >
+                      {speakingText === msg.text ? "🔇" : "🔊"}
+                    </button>
+                  )}
                 </div>
               ))}
               {copilotLoading && (
@@ -939,7 +999,19 @@ export const ResultsPage: React.FC = () => {
             </div>
 
             
-            <form onSubmit={handleSendMessage} className="flex gap-2 pt-2">
+            {showVoiceConsent && (
+              <div className="bg-[#004bb3]/5 border border-[#004bb3]/10 rounded-xl p-3 text-[11px] font-semibold text-slate-500 leading-normal flex flex-col gap-2 text-left">
+                <p>🎙️ Voice input uses your browser's built-in speech recognition; audio is not stored by MedDecode AI.</p>
+                <button
+                  type="button"
+                  onClick={acceptVoiceConsent}
+                  className="self-end bg-[#004bb3] text-white text-[10px] px-2.5 py-1 rounded-lg font-bold"
+                >
+                  Enable Voice Input
+                </button>
+              </div>
+            )}
+            <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 items-center">
               <input
                 type="text"
                 placeholder="Ask about your report, medicines, or parameters..."
@@ -948,6 +1020,27 @@ export const ResultsPage: React.FC = () => {
                 disabled={copilotLoading}
                 className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-full px-5 py-3 text-sm font-semibold outline-none focus:border-[#004bb3] focus:ring-1 focus:ring-[#004bb3] transition-all disabled:opacity-50"
               />
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={copilotLoading}
+                className={`p-3 rounded-full border transition-all shrink-0 flex items-center justify-center cursor-pointer ${
+                  !isVoiceSupported
+                    ? "bg-slate-100 border-slate-200 text-slate-300 opacity-50 cursor-not-allowed"
+                    : isListening
+                    ? "bg-red-500 border-red-500 text-white animate-pulse"
+                    : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100"
+                }`}
+                title={
+                  !isVoiceSupported
+                    ? "Speech recognition is not supported in this browser."
+                    : isListening
+                    ? "Stop listening"
+                    : "Start voice typing"
+                }
+              >
+                {isListening ? "🔴" : "🎙️"}
+              </button>
               <button
                 type="submit"
                 disabled={copilotLoading}
