@@ -65,7 +65,7 @@ function getConfidenceDisplay(score: number): { label: string; emoji: string; te
 
 export const ResultsPage: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
   const search = useSearch({ from: '/results' }) as SearchParams
   const documentId = search.docId
 
@@ -77,6 +77,13 @@ export const ResultsPage: React.FC = () => {
   const [expandedMedicines, setExpandedMedicines] = useState<Record<string, boolean>>({})
   const [docInfo, setDocInfo] = useState<{ name: string; document_type: string } | null>(null)
   const [confidence, setConfidence] = useState<number | null>(null)
+
+  // Original document viewer
+  const [showOriginal, setShowOriginal] = useState(false)
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null)
+  const [originalLoading, setOriginalLoading] = useState(false)
+  const [filePath, setFilePath] = useState<string | null>(null)
+  const [isPdf, setIsPdf] = useState(false)
 
   
   const [viewMode, setViewMode] = useState<'simple' | 'medical'>('simple')
@@ -181,52 +188,18 @@ export const ResultsPage: React.FC = () => {
 
     setTimeout(async () => {
       let botAnswer = ""
-      const sections = analysis.structured_output?.sections || []
-      const abnormalValues = analysis.structured_output?.abnormalValues || []
       
       try {
-        const copilotKey = import.meta.env.VITE_GEMINI_API_KEY || ''
-        const prompt = `You are a medical assistant helping a patient understand their medical document.
-Here is the summary of the document:
-${analysis.summary}
-
-Medicines:
-${JSON.stringify(medicines)}
-
-Abnormal Values:
-${JSON.stringify(abnormalValues)}
-
-Sections/Glossary:
-${JSON.stringify(sections)}
-
-Patient's Question: "${userMsg}"
-
-Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in mind:
-- If they ask about a medicine not in this document, advise them to check with their doctor.
-- Reassure them but remind them that you are an AI assistant and they should consult their doctor for clinical decisions.
-- Do not use markdown format other than simple bullet points if necessary.`
-
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${copilotKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: 1000
-            }
-          })
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('copilot', {
+          body: { analysisId: analysis.id, question: userMsg }
         })
-
-        if (res.status === 200) {
-          const resJson = await res.json()
-          const text = resJson.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text) {
-            botAnswer = text
-          }
+        if (!fnError && fnData?.answer) {
+          botAnswer = fnData.answer
+        } else if (fnError) {
+          console.error("Copilot invoke error:", fnError)
         }
       } catch (err) {
-        console.warn("Client-side Gemini API call failed, falling back to local responder:", err)
+        console.warn("Copilot Edge Function call failed, falling back to local responder:", err)
       }
 
       if (!botAnswer) {
@@ -249,7 +222,7 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
         
         const { data: docData, error: docErr } = await supabase
           .from('documents')
-          .select('name, document_type')
+          .select('name, document_type, file_path, mime_type')
           .eq('id', documentId)
           .single()
 
@@ -257,6 +230,10 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           console.error("Error loading document:", docErr)
         } else if (docData) {
           setDocInfo(docData)
+          if (docData?.file_path) {
+            setFilePath(docData.file_path)
+            setIsPdf(docData.mime_type === 'application/pdf' || docData.file_path?.endsWith('.pdf'))
+          }
         }
 
         
@@ -324,6 +301,70 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
       ...prev,
       [id]: !prev[id]
     }))
+  }
+
+  const handleViewOriginal = async () => {
+    if (showOriginal) {
+      setShowOriginal(false)
+      return
+    }
+    if (originalUrl) {
+      setShowOriginal(true)
+      return
+    }
+    if (!filePath) return
+    setOriginalLoading(true)
+    try {
+      const { data, error } = await supabase.storage
+        .from('Med Decode Ai')
+        .createSignedUrl(filePath, 300)
+      if (!error && data?.signedUrl) {
+        setOriginalUrl(data.signedUrl)
+        setShowOriginal(true)
+      }
+    } catch (e) {
+      console.error('Failed to get signed URL', e)
+    } finally {
+      setOriginalLoading(false)
+    }
+  }
+
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareSuccess, setShareSuccess] = useState(false)
+
+  const handleShare = async () => {
+    if (!documentId) return
+    if (!user || isAnonymous) {
+      alert("Please sign in or create an account to share links with your doctor.")
+      return
+    }
+    setShareLoading(true)
+    setShareSuccess(false)
+    try {
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(20)))
+        .map(b => b.toString(16).padStart(2, '0')).join('')
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      const { error } = await supabase.from('shared_links').insert({
+        document_id: documentId,
+        user_id: user.id,
+        token,
+        expires_at: expiresAt
+      })
+      if (!error) {
+        const shareUrl = `${window.location.origin}/share/${token}`
+        await navigator.clipboard.writeText(shareUrl)
+        setShareSuccess(true)
+        alert(`Link copied! Valid for 7 days:\n${shareUrl}`)
+        setTimeout(() => setShareSuccess(false), 3000)
+      } else {
+        alert(`Failed to create share link: ${error.message}`)
+      }
+    } catch (e: any) {
+      console.error('Share failed', e)
+      alert('Could not generate share link.')
+    } finally {
+      setShareLoading(false)
+    }
   }
 
   const handleSpeak = () => {
@@ -438,11 +479,20 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
             📥 Download PDF
           </button>
           <button
-            onClick={() => alert("Copied results link to clipboard!")}
-            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-extrabold px-5 py-2.5 rounded-full text-xs cursor-pointer inline-flex items-center gap-1.5"
+            onClick={handleShare}
+            disabled={shareLoading}
+            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-extrabold px-5 py-2.5 rounded-full text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60"
           >
-            🔗 Share
+            {shareLoading ? '⏳ Sharing...' : shareSuccess ? '✅ Link Copied!' : '🔗 Share'}
           </button>
+          {filePath && (
+            <button
+              onClick={handleViewOriginal}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold text-sm transition-all"
+            >
+              {originalLoading ? '⏳' : showOriginal ? '🔼 Hide Original' : '📄 View Original Document'}
+            </button>
+          )}
           <button
             onClick={handleDelete}
             className="bg-red-50 hover:bg-red-100 text-red-500 font-extrabold px-5 py-2.5 rounded-full text-xs cursor-pointer inline-flex items-center gap-1.5"
@@ -451,6 +501,31 @@ Provide a brief, comforting, plain English response (max 3-4 sentences). Keep in
           </button>
         </div>
       </div>
+
+      {/* Original Document Viewer Panel */}
+      {showOriginal && originalUrl && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200">📄 Original Document</h3>
+            <span className="text-xs text-slate-400">Signed link · valid 5 minutes</span>
+          </div>
+          <div className="p-2">
+            {isPdf ? (
+              <iframe
+                src={originalUrl}
+                className="w-full h-[600px] border-0"
+                title="Original document"
+              />
+            ) : (
+              <img
+                src={originalUrl}
+                alt="Original document"
+                className="max-w-full mx-auto rounded-lg"
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       
       <div className="flex justify-center print:hidden">

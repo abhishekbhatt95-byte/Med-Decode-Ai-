@@ -22,6 +22,7 @@ export const DashboardPage: React.FC = () => {
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<string>('all')
+  const [todayUsage, setTodayUsage] = useState<number | null>(null)
 
   const fetchDocuments = async () => {
     if (!user) return
@@ -41,6 +42,24 @@ export const DashboardPage: React.FC = () => {
     }
   }
 
+  const fetchUsage = async () => {
+    if (!user) return
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const { data, error } = await supabase
+        .from('usage')
+        .select('count')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .maybeSingle()
+
+      if (error) throw error
+      setTodayUsage(data?.count ?? 0)
+    } catch (err) {
+      console.error("Error fetching usage:", err)
+    }
+  }
+
   useEffect(() => {
     if (authLoading) return
     if (!user) {
@@ -49,6 +68,7 @@ export const DashboardPage: React.FC = () => {
     }
 
     fetchDocuments()
+    fetchUsage()
 
     
     const channel = supabase
@@ -58,6 +78,7 @@ export const DashboardPage: React.FC = () => {
         { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${user.id}` },
         () => {
           fetchDocuments()
+          fetchUsage()
         }
       )
       .subscribe()
@@ -147,7 +168,12 @@ export const DashboardPage: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-extrabold text-foreground">Welcome Back</h1>
-          <p className="text-muted-foreground mt-1">Translate, manage, and audit your medical document history</p>
+          <p className="text-muted-foreground mt-1 mb-2">Translate, manage, and audit your medical document history</p>
+          {todayUsage !== null && (
+            <span className="inline-flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
+              📊 {todayUsage} of 10 daily free analyses used
+            </span>
+          )}
         </div>
         <Link
           to="/upload"

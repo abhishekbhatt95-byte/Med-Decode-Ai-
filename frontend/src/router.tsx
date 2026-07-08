@@ -17,10 +17,12 @@ import { ProcessingPage } from './pages/ProcessingPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { TrendsPage } from './pages/TrendsPage'
+import { SharedResultPage } from './pages/SharedResultPage'
 
 
 const RootLayout = () => {
-  const { user, signOut } = useAuth()
+  const { user, signOut, isAnonymous } = useAuth()
   const { largeText, highContrast, darkMode, setLargeText, setHighContrast, setDarkMode } = useAccessibility()
   const navigate = useNavigate()
 
@@ -75,6 +77,11 @@ const RootLayout = () => {
                 <Link to="/dashboard" className="font-medium text-muted-foreground hover:text-foreground transition-all">
                   Dashboard
                 </Link>
+                {user && !isAnonymous && (
+                  <Link to="/trends" className="font-medium text-muted-foreground hover:text-foreground transition-all">
+                    Trends
+                  </Link>
+                )}
                 <Link to="/upload" className="font-medium text-muted-foreground hover:text-foreground transition-all">
                   Upload
                 </Link>
@@ -200,13 +207,23 @@ const profileRoute = createRoute({
   component: ProfilePage,
 })
 
+const trendsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/trends',
+  component: TrendsPage,
+})
+
+const sharedResultRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/share/$token',
+  component: SharedResultPage,
+})
 
 const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '*',
   component: NotFoundPage,
 })
-
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -217,6 +234,8 @@ const routeTree = rootRoute.addChildren([
   processingRoute,
   resultsRoute,
   profileRoute,
+  trendsRoute,
+  sharedResultRoute,
   notFoundRoute,
 ])
 

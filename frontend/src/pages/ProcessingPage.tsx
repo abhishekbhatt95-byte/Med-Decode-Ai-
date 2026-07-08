@@ -69,7 +69,7 @@ export const ProcessingPage: React.FC = () => {
         try {
           const { data: doc, error: docErr } = await supabase
             .from('documents')
-            .select('status, is_medical, name')
+            .select('status, is_medical, name, processing_stage')
             .eq('id', documentId)
             .single()
 
@@ -118,28 +118,16 @@ export const ProcessingPage: React.FC = () => {
             return
           }
 
-          const { data: ocrText } = await supabase
-            .from('extracted_text')
-            .select('id')
-            .eq('document_id', documentId)
-            .limit(1)
-
-          if (abortController.signal.aborted) return
-
-          if (ocrText && ocrText.length > 0) {
-            const { data: analysis } = await supabase
-              .from('analyses')
-              .select('id')
-              .eq('document_id', documentId)
-              .limit(1)
-
-            if (analysis && analysis.length > 0) {
-              setCurrentStep('saving')
-            } else {
-              setCurrentStep('understanding')
-            }
-          } else {
+          // Use processing_stage for granular UI updates
+          const stage = doc.processing_stage
+          if (stage === 'saving') {
+            setCurrentStep('saving')
+          } else if (stage === 'ai_analysis') {
+            setCurrentStep('understanding')
+          } else if (stage === 'ocr') {
             setCurrentStep('reading')
+          } else {
+            setCurrentStep('validating')
           }
 
         } catch (e: any) {
@@ -386,7 +374,10 @@ export const ProcessingPage: React.FC = () => {
       
       <div className="text-center space-y-3">
         <h1 className="text-3xl md:text-4xl font-extrabold text-[#004bb3] tracking-tight">
-          Analyzing your document...
+          {currentStep === 'reading' ? 'Reading your document...' :
+           currentStep === 'understanding' ? 'Understanding medical terms...' :
+           currentStep === 'saving' ? 'Saving your results...' :
+           'Analyzing your document...'}
         </h1>
         
         <p className="text-slate-500 text-sm font-semibold max-w-md mx-auto leading-relaxed">

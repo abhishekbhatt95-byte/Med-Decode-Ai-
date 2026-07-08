@@ -8,32 +8,27 @@ type AuthMode = 'signin' | 'signup' | 'forgot' | 'magiclink'
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
-  
+  const { user, isAnonymous, upgradeAnonymous } = useAuth()
   
   const [mode, setMode] = useState<AuthMode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   
-  
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  
   React.useEffect(() => {
-    if (user) {
+    if (user && !isAnonymous) {
       navigate({ to: '/dashboard' })
     }
-  }, [user, navigate])
+  }, [user, isAnonymous, navigate])
 
-  
   const sanitize = (val: string) => {
     return val.replace(/<[^>]*>/g, '').trim()
   }
 
-  
   const enforceRateLimit = (): boolean => {
     const rateLimit = checkAuthRateLimit()
     if (!rateLimit.allowed) {
@@ -88,24 +83,37 @@ export const AuthPage: React.FC = () => {
     const sanitizedFullName = sanitize(fullName)
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email: sanitizedEmail,
-        password,
-        options: {
-          data: {
-            full_name: sanitizedFullName,
-          },
-          emailRedirectTo: `${window.location.origin}/consent`,
-        },
-      })
-
-      if (error) {
-        setErrorMsg(error.message)
+      if (isAnonymous) {
+        const { error } = await upgradeAnonymous(sanitizedEmail, password, sanitizedFullName)
+        if (error) {
+          setErrorMsg(error)
+        } else {
+          setSuccessMsg("Account created successfully! Your guest history has been saved to your account.")
+          setEmail('')
+          setPassword('')
+          setFullName('')
+          setTimeout(() => navigate({ to: '/dashboard' }), 1500)
+        }
       } else {
-        setSuccessMsg("Registration successful! Please check your email for verification link.")
-        setEmail('')
-        setPassword('')
-        setFullName('')
+        const { error } = await supabase.auth.signUp({
+          email: sanitizedEmail,
+          password,
+          options: {
+            data: {
+              full_name: sanitizedFullName,
+            },
+            emailRedirectTo: `${window.location.origin}/consent`,
+          },
+        })
+
+        if (error) {
+          setErrorMsg(error.message)
+        } else {
+          setSuccessMsg("Registration successful! Please check your email for verification link.")
+          setEmail('')
+          setPassword('')
+          setFullName('')
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || "An unexpected error occurred.")
@@ -176,8 +184,11 @@ export const AuthPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] py-12 px-4">
       <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl p-8 md:p-10">
-        
-        
+        {isAnonymous && (
+          <div className="bg-[#004bb3]/10 text-[#004bb3] border border-[#004bb3]/20 rounded-xl p-4 mb-6 text-sm font-semibold text-center">
+            💡 You are currently browsing as a guest. Create an account below to save your history permanently.
+          </div>
+        )}
         {mode !== 'forgot' && (
           <div className="flex border-b border-border mb-8">
             <button

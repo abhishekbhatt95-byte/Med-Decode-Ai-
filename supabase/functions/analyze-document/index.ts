@@ -247,6 +247,25 @@ serve(async (req) => {
       endpoint: 'analyze-document'
     })
 
+    if (userId) {
+      const today = new Date().toISOString().split('T')[0]
+      const { data: usageRow, error: usageErr } = await supabase
+        .from('usage')
+        .select('count')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .maybeSingle()
+
+      if (usageErr) {
+        console.error("Failed to query usage limits:", usageErr.message)
+      } else if (usageRow && usageRow.count >= 10) {
+        return new Response(JSON.stringify({ error: "Daily limit exceeded. Max 10 free analyses per day." }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+    }
+
     
     const { data: document, error: docErr } = await supabase
       .from('documents')
@@ -259,7 +278,7 @@ serve(async (req) => {
     }
 
     
-    await supabase.from('documents').update({ status: 'processing' }).eq('id', documentId)
+    await supabase.from('documents').update({ status: 'processing', processing_stage: 'ocr' }).eq('id', documentId)
 
     
     await supabase.from('analyses').delete().eq('document_id', documentId)
@@ -387,6 +406,9 @@ serve(async (req) => {
         duration_ms: 0
       })
     }
+
+    // Update stage to ai_analysis before calling Gemini
+    await supabase.from('documents').update({ processing_stage: 'ai_analysis' }).eq('id', documentId)
 
     
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
@@ -561,6 +583,9 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       })
     }
 
+    // Update stage to saving before inserting analysis rows
+    await supabase.from('documents').update({ processing_stage: 'saving' }).eq('id', documentId)
+
     
     const { data: analysisData, error: analysisErr } = await supabase
       .from('analyses')
@@ -651,9 +676,17 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       docType = 'unknown'
     }
 
+    if (userId) {
+      const today = new Date().toISOString().split('T')[0]
+      await supabase.rpc('increment_daily_usage', { p_user_id: userId, p_date: today }).catch((rpcErr: any) => {
+        console.error("RPC increment_daily_usage failed:", rpcErr.message)
+      })
+    }
+
     const { error: updateErr } = await supabase.from('documents').update({
       status: 'completed',
-      document_type: docType
+      document_type: docType,
+      processing_stage: null
     }).eq('id', documentId)
 
     if (updateErr) {

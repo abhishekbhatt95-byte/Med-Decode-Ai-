@@ -17,6 +17,7 @@ interface AuthContextType {
   isAnonymous: boolean
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  upgradeAnonymous: (email: string, password: string, fullName?: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -55,8 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   useEffect(() => {
-    
-    
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         setSession(session)
@@ -64,10 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await fetchProfile(session.user.id)
         setLoading(false)
       } else {
-        
-        
-        
-        
         const tryAnon = async (): Promise<boolean> => {
           const { data, error } = await supabase.auth.signInAnonymously()
           if (error) {
@@ -76,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           if (data.user) {
             setUser(data.user)
-            setSession(data.session) 
+            setSession(data.session)
             return true
           }
           return false
@@ -84,7 +79,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const ok = await tryAnon()
         if (!ok) {
-          
           await new Promise(r => setTimeout(r, 1500))
           await tryAnon()
         }
@@ -92,7 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })
 
-    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         setSession(newSession)
@@ -121,6 +114,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false)
   }
 
+  const upgradeAnonymous = async (email: string, password: string, fullName?: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.updateUser({
+      email,
+      password,
+      data: fullName ? { full_name: fullName } : undefined
+    })
+    if (error) {
+      return { error: error.message }
+    }
+    return { error: null }
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -131,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAnonymous,
         signOut,
         refreshProfile,
+        upgradeAnonymous,
       }}
     >
       {children}
