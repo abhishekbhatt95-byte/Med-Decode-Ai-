@@ -32,6 +32,7 @@ For the Supabase Edge Functions, set the following secrets in your Supabase Dash
 ```bash
 supabase secrets set GEMINI_API_KEY="your-gemini-api-key"
 supabase secrets set OCR_SPACE_API_KEY="your-ocr-space-key"
+supabase secrets set ALLOWED_ORIGINS="http://localhost:5173,https://your-production-domain.com"
 ```
 
 ---
@@ -92,6 +93,8 @@ If you are setting up the remote database for the first time:
 
 ---
 
-## 🛡️ License
+## 🛡️ Medical Disclaimer
 
-Educational Use Only. Always consult with a licensed medical professional before making any health decisions.
+MedDecode AI is an educational platform designed to explain medical terms and documents in plain language. It does not provide medical advice, diagnosis, or treatment, and should never be used as a substitute for consulting a licensed medical professional or physician.
+
+**Important:** Users must read and accept this disclaimer via [ConsentPage.tsx](file:///c:/Users/abhis/Desktop/Med-Decode-Ai-/frontend/src/pages/ConsentPage.tsx) before they are allowed to upload or analyze any documents.
