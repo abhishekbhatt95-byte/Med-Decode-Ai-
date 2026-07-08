@@ -1,0 +1,169 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const { message, conversationHistory, currentPageContext } = await req.json()
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return new Response(JSON.stringify({ error: 'Message is required.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header.' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    )
+
+    const { data: userData, error: userError } = await supabase.auth.getUser(token)
+    if (userError || !userData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const userId = userData.user.id
+    const today = new Date().toISOString().split('T')[0]
+
+    const { data: allowed, error: usageErr } = await supabase
+      .rpc('try_increment_daily_usage', {
+        p_user_id: userId,
+        p_date: today,
+        p_cap: 30,
+        p_feature: 'assistant_chat'
+      })
+
+    if (usageErr) {
+      console.error("Failed to increment daily chat usage:", usageErr.message)
+    } else if (!allowed) {
+      return new Response(JSON.stringify({ error: 'Daily limit exceeded. Max 30 messages to the Assistant per day.' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    let pageContextStr = ""
+    const documentId = currentPageContext?.documentId
+
+    if (documentId && UUID_REGEX.test(documentId)) {
+      const { data: document } = await supabase
+        .from('documents')
+        .select('user_id, name')
+        .eq('id', documentId)
+        .maybeSingle()
+
+      if (document && document.user_id === userId) {
+        const { data: analyses } = await supabase
+          .from('analyses')
+          .select('id, summary, structured_output')
+          .eq('document_id', documentId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        const analysis = analyses && analyses.length > 0 ? analyses[0] : null
+        if (analysis) {
+          const { data: medicines } = await supabase
+            .from('medicines')
+            .select('*')
+            .eq('analysis_id', analysis.id)
+
+          pageContextStr = `CURRENT RESULT CONTEXT (The user is viewing this document):
+Document Name: ${document.name}
+Summary: ${analysis.summary}
+Medicines: ${JSON.stringify(medicines || [])}
+Abnormal Values: ${JSON.stringify(analysis.structured_output?.abnormalValues || [])}
+Sections: ${JSON.stringify(analysis.structured_output?.sections || [])}`
+        }
+      }
+    }
+
+    const systemPrompt = `You are a medical assistant and navigation guide for MedDecode AI.
+Your goal is to answer general questions about using MedDecode AI itself, explaining its features, and answering queries.
+Features of MedDecode AI:
+1. Upload Flow: Users can upload prescriptions, blood panels, lab reports, hospital bills, or labels (PDF, JPG, PNG, HEIC up to 20MB).
+2. Dashboard: View past results, search files, or delete files (which complies with data rights).
+3. Trends View: If they upload 2+ blood reports, they can select parameters (like HbA1c, glucose) and chart values over time.
+4. Sharing: They can generate secure, read-only links to share results with their doctor (expires in 7 days).
+5. Quota Limits: 10 free document analyses per day. 30 general chat messages per day.
+
+Keep responses concise (max 3-4 sentences), comforting, and simple.
+If the current result context below is populated, you may also answer questions about the specific report the user is viewing.
+Always remind the user you are an AI assistant and they should consult their doctor for clinical decisions. Do not use markdown other than bullet points.
+
+${pageContextStr}`
+
+    const contents = []
+    for (const msg of (conversationHistory || [])) {
+      contents.push({
+        role: msg.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      })
+    }
+    contents.push({
+      role: 'user',
+      parts: [{ text: message }]
+    })
+
+    const geminiKey = Deno.env.get('GEMINI_API_KEY')!
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents,
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+        }),
+      }
+    )
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text()
+      console.error('Gemini assistant error:', errText)
+      return new Response(JSON.stringify({ error: 'AI service unavailable.' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const geminiJson = await geminiRes.json()
+    const answer = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+    return new Response(JSON.stringify({ answer }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
+  } catch (err) {
+    console.error('Assistant function error:', err)
+    return new Response(JSON.stringify({ error: 'Internal server error.' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+})

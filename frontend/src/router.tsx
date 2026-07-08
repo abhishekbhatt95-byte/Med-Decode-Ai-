@@ -19,6 +19,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { TrendsPage } from './pages/TrendsPage'
 import { SharedResultPage } from './pages/SharedResultPage'
+import { AssistantWidget } from './components/AssistantWidget'
 
 
 const RootLayout = () => {
@@ -150,6 +151,7 @@ const RootLayout = () => {
           </div>
         </div>
       </footer>
+      <AssistantWidget />
     </div>
   )
 }
