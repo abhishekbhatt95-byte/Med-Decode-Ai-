@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "@tanstack/react-router";
+import { fetchSharedResult } from "../services/sharedResult";
 
 interface Medicine {
   id: string;
@@ -46,22 +47,8 @@ export const SharedResultPage: React.FC = () => {
   useEffect(() => {
     const fetchSharedData = async () => {
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const res = await fetch(
-          `${supabaseUrl}/functions/v1/shared-result?token=${token}`,
-          {
-            headers: { apikey: supabaseAnonKey },
-          }
-        );
-
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.error || "This link is invalid or has expired.");
-        }
-
-        const sharedPayload = await res.json();
-        setData(sharedPayload);
+        const sharedPayload = await fetchSharedResult(token);
+        setData(sharedPayload as any);
       } catch (err: any) {
         setErrorMsg(err.message || String(err));
       } finally {
@@ -106,9 +93,9 @@ export const SharedResultPage: React.FC = () => {
 
   return (
     <div className="py-8 px-4 max-w-5xl mx-auto space-y-8 text-left">
-      <div className="bg-[#004bb3]/5 border border-[#004bb3]/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-primary/5 border border-primary/20 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <span className="bg-[#004bb3] text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+          <span className="bg-primary text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
             Shared Document View
           </span>
           <h2 className="font-extrabold text-slate-800 dark:text-white mt-3 text-lg">
@@ -120,7 +107,7 @@ export const SharedResultPage: React.FC = () => {
         </div>
         <Link
           to="/"
-          className="bg-[#004bb3] hover:bg-[#003d99] text-white font-extrabold px-6 py-3 rounded-full text-xs cursor-pointer shadow-sm text-center"
+          className="bg-primary hover:bg-primary/90 text-white font-extrabold px-6 py-3 rounded-full text-xs cursor-pointer shadow-sm text-center"
         >
           Try MedDecode AI Free
         </Link>
@@ -128,7 +115,7 @@ export const SharedResultPage: React.FC = () => {
 
       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-3xl space-y-6 shadow-sm">
         <div>
-          <h3 className="text-xl font-extrabold text-[#004bb3]">Document Summary</h3>
+          <h3 className="text-xl font-extrabold text-primary">Document Summary</h3>
           <p className="text-slate-600 dark:text-slate-300 font-medium text-sm leading-relaxed mt-3">
             {analysis.summary}
           </p>
@@ -180,7 +167,7 @@ export const SharedResultPage: React.FC = () => {
       {medicines.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-3xl space-y-6 shadow-sm">
           <div>
-            <h3 className="text-xl font-extrabold text-[#004bb3]">Prescribed Medications</h3>
+            <h3 className="text-xl font-extrabold text-primary">Prescribed Medications</h3>
             <p className="text-slate-400 text-xs font-semibold mt-1">
               Key indications and use summaries for prescribed treatments.
             </p>
@@ -192,7 +179,7 @@ export const SharedResultPage: React.FC = () => {
                 className="border border-slate-100 dark:border-slate-800 p-5 rounded-2xl"
               >
                 <div className="flex flex-wrap gap-2 items-baseline justify-between">
-                  <h4 className="text-base font-extrabold text-[#004bb3]">{m.brand_name}</h4>
+                  <h4 className="text-base font-extrabold text-primary">{m.brand_name}</h4>
                   {m.generic_name && (
                     <span className="text-xs font-semibold text-slate-400">
                       ({m.generic_name})
@@ -219,7 +206,7 @@ export const SharedResultPage: React.FC = () => {
           key={idx}
           className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-3xl space-y-4 shadow-sm"
         >
-          <h3 className="text-xl font-extrabold text-[#004bb3]">{sec.title}</h3>
+          <h3 className="text-xl font-extrabold text-primary">{sec.title}</h3>
           <p className="text-slate-600 dark:text-slate-300 font-medium text-sm leading-relaxed whitespace-pre-line">
             {sec.content}
           </p>
@@ -229,7 +216,7 @@ export const SharedResultPage: React.FC = () => {
       {analysis.doctor_questions && analysis.doctor_questions.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-3xl space-y-6 shadow-sm">
           <div>
-            <h3 className="text-xl font-extrabold text-[#004bb3]">Questions for Your Doctor</h3>
+            <h3 className="text-xl font-extrabold text-primary">Questions for Your Doctor</h3>
             <p className="text-slate-400 text-xs font-semibold mt-1">
               Suggestions of specific items to bring up during your next clinic appointment.
             </p>
@@ -240,7 +227,7 @@ export const SharedResultPage: React.FC = () => {
                 key={idx}
                 className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300 font-semibold leading-relaxed"
               >
-                <span className="text-[#004bb3] text-lg select-none">💬</span>
+                <span className="text-primary text-lg select-none">💬</span>
                 <span>{q}</span>
               </li>
             ))}
