@@ -1,6 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8"
 import { getCorsHeaders } from "../_shared/cors.ts"
+import {
+  authenticateRequest,
+  enforceRequestSize,
+  errorResponse,
+  successResponse,
+  logFailure,
+  logRequest,
+  getClientIp,
+  createServiceClient,
+} from '../_shared/security.ts'
 
 function maskPII(text: string): string {
   if (!text) return ""
@@ -117,6 +127,12 @@ async function runOcr(fileUrl: string, isPdf: boolean, ocrSpaceKey: string, engi
   return { text: extractedText, ocrExitCode }
 }
 
+function sanitizeOcrText(text: string): string {
+  if (!text) return ''
+  // deno-lint-ignore no-control-regex
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+}
+
 function uint8ArrayToBase64(uint8: Uint8Array): string {
   let binary = "";
   const len = uint8.byteLength;
@@ -164,102 +180,65 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
+  const supabase = createServiceClient()
   let documentId: string | null = null
+  let userId: string | null = null
 
   try {
-    
-    const contentLength = req.headers.get('content-length')
-    if (contentLength && parseInt(contentLength, 10) > 1000) {
-      return new Response(JSON.stringify({ error: "Payload too large. Limit is 1KB." }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
+    const sizeErr = enforceRequestSize(req, 2048)
+    if (sizeErr) return errorResponse(sizeErr, 413, corsHeaders)
 
-    
+    const auth = await authenticateRequest(req, supabase)
+    if (auth.error) return errorResponse(auth.error, 401, corsHeaders)
+    userId = auth.userId
+
     let body: any
     try {
       body = await req.json()
     } catch (_) {
-      return new Response(JSON.stringify({ error: "Malformed JSON payload" }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return errorResponse('Malformed JSON payload.', 400, corsHeaders)
     }
 
-    
     documentId = body?.documentId
+    const detailLevel = body?.detailLevel || 'full'
+    const docType = body?.docType || 'unknown'
+    // outputLanguage: 'hindi' generates all report text in Hindi (Devanagari); defaults to 'english'
+    const outputLanguage: 'english' | 'hindi' = body?.outputLanguage === 'hindi' ? 'hindi' : 'english'
+    // reuseOcr: true skips the OCR step and reuses stored extracted_text — used for re-analyze in a different language
+    const reuseOcr: boolean = body?.reuseOcr === true
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!documentId || typeof documentId !== 'string' || !uuidRegex.test(documentId)) {
-      return new Response(JSON.stringify({ error: "Invalid or malformed documentId" }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return errorResponse('Invalid document ID.', 400, corsHeaders)
     }
 
-    
-    const clientIp = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown'
-    const authHeader = req.headers.get('Authorization')
-    let userId: string | null = null
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user } } = await supabase.auth.getUser(token)
-        userId = user?.id || null
-      } catch (_) {  }
-    }
+    const clientIp = getClientIp(req)
 
-    
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
-    let query = supabase
+    const { count, error: countErr } = await supabase
       .from('request_logs')
       .select('id', { count: 'exact', head: true })
       .eq('endpoint', 'analyze-document')
       .gt('created_at', fifteenMinutesAgo)
+      .or(`ip_address.eq.${clientIp},user_id.eq.${userId}`)
 
-    if (userId) {
-      query = query.or(`ip_address.eq.${clientIp},user_id.eq.${userId}`)
-    } else {
-      query = query.eq('ip_address', clientIp)
-    }
-
-    const { count, error: countErr } = await query
     if (countErr) {
-      console.error("Failed to query rate limits:", countErr.message)
+      logFailure('analyze-document', userId, `Rate limit check failed: ${countErr.message}`)
     } else if (count !== null && count >= 5) {
-      return new Response(JSON.stringify({ error: "Rate limit exceeded. Max 5 requests per 15 minutes." }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return errorResponse('Rate limit exceeded. Max 5 analyses per 15 minutes.', 429, corsHeaders)
     }
 
-    
-    await supabase.from('request_logs').insert({
-      ip_address: clientIp,
-      user_id: userId,
-      endpoint: 'analyze-document'
-    })
+    await logRequest(supabase, userId, 'analyze-document', clientIp)
 
-    if (userId) {
-      const today = new Date().toISOString().split('T')[0]
-      const { data: allowed, error: usageErr } = await supabase
-        .rpc('try_increment_daily_usage', { p_user_id: userId, p_date: today, p_cap: 10 })
+    const today = new Date().toISOString().split('T')[0]
+    const { data: allowed, error: usageErr } = await supabase
+      .rpc('try_increment_daily_usage', { p_user_id: userId, p_date: today, p_cap: 10 })
 
-      if (usageErr) {
-        console.error("Failed to check and increment usage limits:", usageErr.message)
-      } else if (!allowed) {
-        return new Response(JSON.stringify({ error: "Daily limit exceeded. Max 10 free analyses per day." }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+    if (usageErr) {
+      logFailure('analyze-document', userId, `Usage check failed: ${usageErr.message}`)
+    } else if (!allowed) {
+      return errorResponse('Daily limit reached. Max 10 free analyses per day.', 429, corsHeaders)
     }
 
-    
     const { data: document, error: docErr } = await supabase
       .from('documents')
       .select('*')
@@ -267,16 +246,30 @@ serve(async (req) => {
       .single()
 
     if (docErr || !document) {
-      throw new Error(`Failed to fetch document: ${docErr?.message || 'Not found'}`)
+      return errorResponse('Document not found.', 404, corsHeaders)
+    }
+
+    if (document.user_id !== userId) {
+      return errorResponse('Access denied.', 403, corsHeaders)
+    }
+
+    const fileSizeMb = (document.size || 0) / (1024 * 1024)
+    if (fileSizeMb > 20) {
+      return errorResponse('File too large. Maximum upload size is 20MB.', 413, corsHeaders)
     }
 
     
     await supabase.from('documents').update({ status: 'processing', processing_stage: 'ocr' }).eq('id', documentId)
 
-    
-    await supabase.from('analyses').delete().eq('document_id', documentId)
-    await supabase.from('extracted_text').delete().eq('document_id', documentId)
-    await supabase.from('ocr_results').delete().eq('document_id', documentId)
+    if (!reuseOcr) {
+      // Fresh analysis: wipe all existing records and re-run full pipeline
+      await supabase.from('analyses').delete().eq('document_id', documentId)
+      await supabase.from('extracted_text').delete().eq('document_id', documentId)
+      await supabase.from('ocr_results').delete().eq('document_id', documentId)
+    } else {
+      // Re-analyze in new language: keep OCR results, only delete the AI analysis
+      await supabase.from('analyses').delete().eq('document_id', documentId)
+    }
 
     
     const { data: signedUrlData, error: signedUrlErr } = await supabase.storage
@@ -331,50 +324,74 @@ serve(async (req) => {
     let extractedText = ""
     let ocrExitCode: number | null = null
     let usedFallbackEngine = false
-    const ocrProvider = "ocr_space"
-    const configuredOcrKey = Deno.env.get('OCR_SPACE_API_KEY')
-    if (!configuredOcrKey) {
-      console.error("OCR_SPACE_API_KEY is not set! Falling back to the public 'helloworld' demo key, " +
-        "which is heavily rate-limited and size-capped. Set a real key as a Supabase secret before relying on this in production.")
-    }
-    const ocrSpaceKey = configuredOcrKey || 'helloworld'
+    const ocrProvider = "tesseract"
 
-    try {
-      
+    if (reuseOcr) {
+      // Re-analyze path: fetch the OCR text we already stored from the previous run
+      const { data: storedOcr } = await supabase
+        .from('extracted_text')
+        .select('raw_text')
+        .eq('document_id', documentId)
+        .maybeSingle()
+      extractedText = storedOcr?.raw_text || ''
+      ocrExitCode = 1 // Previously accepted quality
+      console.log(`reuseOcr=true: using stored extracted_text (${extractedText.length} chars)`)
+    } else {
+      // Fresh analysis path: run the full OCR pipeline
+      const configuredOcrKey = Deno.env.get('OCR_SPACE_API_KEY')
+      if (!configuredOcrKey) {
+        console.error("OCR_SPACE_API_KEY is not set! Falling back to the public 'helloworld' demo key, " +
+          "which is heavily rate-limited and size-capped. Set a real key as a Supabase secret before relying on this in production.")
+      }
+      const ocrSpaceKey = configuredOcrKey || 'helloworld'
+
       try {
-        const engine3Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '3')
-        extractedText = engine3Result.text
-        ocrExitCode = engine3Result.ocrExitCode
-        console.log(`OCR Engine 3 succeeded. Text length: ${extractedText.length}`)
-      } catch (engine3Err: any) {
-        console.warn(`OCR Engine 3 failed: ${engine3Err.message}. Falling back to Engine 1...`)
-        
-        const engine1Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '1')
-        extractedText = engine1Result.text
-        ocrExitCode = engine1Result.ocrExitCode
-        usedFallbackEngine = true
-        console.log(`OCR Engine 1 (fallback) succeeded. Text length: ${extractedText.length}`)
-      }
-    } catch (ocrErr: any) {
-      console.warn("OCR failed on all engines, but will attempt to proceed with multimodal Gemini analysis:", ocrErr.message)
-      await supabase.from('ocr_failures').insert({
-        document_id: documentId,
-        provider: ocrProvider,
-        error_message: ocrErr.message
-      })
+        try {
+          const engine3Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '3')
+          extractedText = engine3Result.text
+          ocrExitCode = engine3Result.ocrExitCode
+          console.log(`OCR Engine 3 succeeded. Text length: ${extractedText.length}`)
+        } catch (engine3Err: any) {
+          console.warn(`OCR Engine 3 failed: ${engine3Err.message}. Falling back to Engine 1...`)
+          
+          const engine1Result = await runOcr(fileUrl, isPdf, ocrSpaceKey, '1')
+          extractedText = engine1Result.text
+          ocrExitCode = engine1Result.ocrExitCode
+          usedFallbackEngine = true
+          console.log(`OCR Engine 1 (fallback) succeeded. Text length: ${extractedText.length}`)
+        }
+      } catch (ocrErr: any) {
+        console.warn("OCR failed on all engines, but will attempt to proceed with multimodal Gemini analysis:", ocrErr.message)
+        await supabase.from('ocr_failures').insert({
+          document_id: documentId,
+          provider: ocrProvider,
+          error_message: ocrErr.message
+        })
 
-      if (!includeFile) {
-        await supabase.from('documents').update({ status: 'failed' }).eq('id', documentId)
-        throw ocrErr
+        if (!includeFile) {
+          await supabase.from('documents').update({ status: 'failed' }).eq('id', documentId)
+          throw ocrErr
+        }
       }
-    }
 
-    
-    
-    
-    
-    
-    
+      
+      if (extractedText) {
+        await supabase.from('extracted_text').insert({
+          document_id: documentId,
+          raw_text: extractedText,
+          ocr_provider: ocrProvider,
+          confidence: computeOcrConfidence() / 100
+        })
+
+        await supabase.from('ocr_results').insert({
+          document_id: documentId,
+          provider: ocrProvider,
+          raw_output: { textLength: extractedText.length },
+          duration_ms: 0
+        })
+      }
+    } 
+
     
     function computeOcrConfidence(): number {
       if (!extractedText) return 20 
@@ -383,36 +400,36 @@ serve(async (req) => {
       return Math.max(0, Math.min(100, score))
     }
 
-    
-    if (extractedText) {
-      await supabase.from('extracted_text').insert({
-        document_id: documentId,
-        raw_text: extractedText,
-        ocr_provider: ocrProvider,
-        confidence: computeOcrConfidence() / 100
-      })
-
-      await supabase.from('ocr_results').insert({
-        document_id: documentId,
-        provider: ocrProvider,
-        raw_output: { textLength: extractedText.length },
-        duration_ms: 0
-      })
-    }
-
-    // Update stage to ai_analysis before calling Gemini
     await supabase.from('documents').update({ processing_stage: 'ai_analysis' }).eq('id', documentId)
 
     
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
     if (!geminiApiKey) throw new Error("GEMINI_API_KEY not configured")
 
+    const detailLevelInstruction = detailLevel === 'quick' 
+      ? "FORMATTING REQUEST: Provide a highly concise, quick summary translation. Keep explanations brief, simple, and straight to the point."
+      : detailLevel === 'audit'
+      ? "FORMATTING REQUEST: Provide a highly detailed medical audit. Carefully cross-reference all reference ranges, drug interactions, clinical impressions, and potential ambiguities."
+      : "FORMATTING REQUEST: Provide a comprehensive, full patient-friendly translation."
+
+    const docTypeInstruction = docType !== 'unknown'
+      ? `DOCUMENT TYPE HINT: The user has classified this document as a "${docType}". Use this as guidance during transcription and parsing.`
+      : ""
+
+    // Language instruction — English is the explicit default so the prompt is identical to pre-feature behaviour
+    const languageInstruction = outputLanguage === 'hindi'
+      ? `LANGUAGE REQUIREMENT: Generate ALL explanatory text in Hindi (Devanagari script). This includes: summary, medicalSummary, all explanation section titles and content, doctorQuestions, commonUses, howItWorks, sideEffects, foodRestrictions, precautions, and abnormalValue explanations. Medicine brand names, generic names, chemical parameter names, and reference range values must remain in English — they are universally used in Indian clinical practice and translating them would cause confusion. Use natural, patient-friendly Hindi as found in Indian health education materials. Add a brief note at the end of the summary field: "(यह रिपोर्ट AI द्वारा हिंदी में अनुवादित है। चिकित्सीय निर्णयों के लिए डॉक्टर से परामर्श करें।)"`
+      : `LANGUAGE: Generate all text in clear, plain English.`
+
     const prompt = `You are a medical document translator and an expert in deciphering doctor handwriting, clinical reports, and laboratory panels.
+${languageInstruction}
+${detailLevelInstruction}
+${docTypeInstruction}
 Your task is to analyze the medical document provided (which may contain multiple pages, diagrams, handwritten notes, printed charts, or bills).
 You are given a raw OCR text extraction of the document (note: this OCR may be partial, incomplete, or cover only the first page), and the actual document file itself as a multimodal image/PDF.
 
 OCR Text:
-${maskPII(extractedText.substring(0, 16000))}
+${maskPII(sanitizeOcrText(extractedText.substring(0, 16000)))}
 
 Please perform a deep, comprehensive analysis of both the OCR text and the visual document across ALL pages to transcribe and translate all information accurately.
 
@@ -565,18 +582,15 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
     } catch (err: any) {
       throw new Error(`Failed to parse Gemini candidate text JSON: ${err.message}. Candidate text: ${rawText.substring(0, 500)}`)
     }
-    console.log("Parsed Gemini analysis:", JSON.stringify(rawAnalysis, null, 2))
+    console.log(`Parsed Gemini analysis. documentType=${rawAnalysis.documentType}, isMedical=${rawAnalysis.isMedical}`)
 
 
     
     if (rawAnalysis.isMedical === false) {
       await supabase.from('documents').update({ is_medical: false, status: 'failed' }).eq('id', documentId)
-      return new Response(JSON.stringify({ success: true, isMedical: false }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return successResponse({ success: true, isMedical: false }, corsHeaders)
     }
 
-    // Update stage to saving before inserting analysis rows
     await supabase.from('documents').update({ processing_stage: 'saving' }).eq('id', documentId)
 
     
@@ -590,7 +604,8 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
           abnormalValues: rawAnalysis.abnormalValues || [],
           medicalSummary: rawAnalysis.medicalSummary || '',
           billItems: rawAnalysis.billItems || [],
-          billTotal: rawAnalysis.billTotal ?? null
+          billTotal: rawAnalysis.billTotal ?? null,
+          outputLanguage: outputLanguage
         },
         doctor_questions: rawAnalysis.doctorQuestions || []
       })
@@ -663,17 +678,17 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
       'medicine_label',
       'unknown'
     ]
-    let docType = String(rawAnalysis.documentType || 'unknown').toLowerCase().trim()
-    if (!allowedDocTypes.includes(docType)) {
-      console.warn(`Gemini returned invalid documentType: "${docType}". Falling back to "unknown".`)
-      docType = 'unknown'
+    let computedDocType = String(rawAnalysis.documentType || 'unknown').toLowerCase().trim()
+    if (!allowedDocTypes.includes(computedDocType)) {
+      console.warn(`Gemini returned invalid documentType: "${computedDocType}". Falling back to "unknown".`)
+      computedDocType = 'unknown'
     }
 
 
 
     const { error: updateErr } = await supabase.from('documents').update({
       status: 'completed',
-      document_type: docType,
+      document_type: computedDocType,
       processing_stage: null
     }).eq('id', documentId)
 
@@ -683,28 +698,29 @@ Return ONLY valid JSON (no markdown block, no explanation) matching this exact f
 
     console.log("Document processed successfully!")
 
-    return new Response(JSON.stringify({
-      success: true
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return successResponse({ success: true }, corsHeaders)
 
   } catch (err: any) {
-    console.error("Edge Function error:", err.message)
+    logFailure('analyze-document', userId, err.message, { documentId })
 
-    
     if (documentId) {
       try {
         await supabase.from('documents')
           .update({ status: 'failed' })
           .eq('id', documentId)
           .in('status', ['processing', 'uploaded'])
-      } catch (_) {  }
+      } catch (_) {}
     }
 
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    let userMessage = 'Something went wrong while analyzing your document. Please try again.'
+    if (err.message?.includes('timed out')) {
+      userMessage = 'The analysis took too long. Please try again with a clearer image.'
+    } else if (err.message?.includes('No readable text')) {
+      userMessage = 'Could not read text from this document. Please upload a clearer image.'
+    } else if (err.message?.includes('All Gemini models failed')) {
+      userMessage = 'Our AI service is temporarily busy. Please try again in a few minutes.'
+    }
+
+    return errorResponse(userMessage, 500, corsHeaders)
   }
 })

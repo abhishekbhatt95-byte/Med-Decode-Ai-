@@ -1,49 +1,21 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useAccessibility } from '../context/AccessibilityContext'
 import { supabase } from '../utils/supabase'
 import { useNavigate } from '@tanstack/react-router'
+import { User, Settings, Sliders, LogOut, Mail, Database } from 'lucide-react'
+import { AccessibilityPopover } from '../components/AccessibilityPopover'
+import { useTranslation } from 'react-i18next'
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate()
-  const { user, profile, refreshProfile, signOut } = useAuth()
-  const { largeText, highContrast, darkMode, setLargeText, setHighContrast, setDarkMode } = useAccessibility()
-  
-  
-  const [fullName, setFullName] = useState(profile?.full_name || '')
-  const [updating, setUpdating] = useState(false)
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const { user, profile, signOut } = useAuth()
+  const { t } = useTranslation()
+  const [isAccessPopoverOpen, setIsAccessPopoverOpen] = useState(false)
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) return
-    setUpdating(true)
-    setMessage(null)
 
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
-
-      if (error) throw error
-      await refreshProfile()
-      setMessage({ text: "Profile updated successfully!", type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: err.message || "Failed to update profile.", type: 'error' })
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  
   const handleExportData = async () => {
     if (!user) return
     try {
-      
       const { data: docs } = await supabase
         .from('documents')
         .select('*, extracted_text(*), analyses(*, medicines(*))')
@@ -73,204 +45,167 @@ export const ProfilePage: React.FC = () => {
     }
   }
 
-  
   const handleClearDocuments = async () => {
     if (!user) return
-    const confirm = window.confirm("Are you sure you want to delete all your uploaded documents and simplified analysis records? This action is permanent.")
+    const confirm = window.confirm(
+      t('landing.workflowTitle').includes('प्रक्रिया')
+        ? 'क्या आप वाकई अपने सभी अपलोड किए गए दस्तावेज़ और सरलीकृत विश्लेषण रिकॉर्ड हटाना चाहते हैं? यह कार्रवाई स्थायी है।'
+        : 'Are you sure you want to delete all your uploaded documents and simplified analysis records? This action is permanent.'
+    )
     if (!confirm) return
 
     try {
-      
       await supabase.from('data_deletion_requests').insert({
         user_id: user.id,
         status: 'completed',
         completed_at: new Date().toISOString()
       })
 
-      
       const { error } = await supabase
         .from('documents')
         .delete()
         .eq('user_id', user.id)
 
       if (error) throw error
-      alert("All document records cleared successfully!")
+      alert(
+        t('landing.workflowTitle').includes('प्रक्रिया')
+          ? 'सभी दस्तावेज़ रिकॉर्ड सफलतापूर्वक हटा दिए गए!'
+          : 'All document records cleared successfully!'
+      )
     } catch (e: any) {
       alert(`Failed to clear records: ${e.message}`)
     }
   }
 
-  
-  const handleDeleteAccount = async () => {
-    if (!user) return
-    const confirm = window.confirm("WARNING: This will permanently delete your account, settings, and all uploaded medical records. This meets your GDPR/DPDP Right to Be Forgotten. Do you want to proceed?")
-    if (!confirm) return
-
-    try {
-      
-      await supabase.from('data_deletion_requests').insert({
-        user_id: user.id,
-        status: 'completed',
-        completed_at: new Date().toISOString()
-      })
-
-      
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', user.id)
-
-      if (profileErr) throw profileErr
-
-      
-      await signOut()
-      navigate({ to: '/' })
-      alert("Your account and data have been fully deleted.")
-    } catch (e: any) {
-      alert(`Account deletion failed: ${e.message}`)
-    }
-  }
-
   return (
-    <div className="py-8 px-4 max-w-2xl mx-auto space-y-8">
+    <div className="py-8 px-4 max-w-4xl mx-auto space-y-6 text-left animate-fade-in">
       <div>
-        <h1 className="text-3xl font-extrabold text-foreground">Profile & Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account information, accessibility styles, and medical data options</p>
+        <h1 className="text-3xl font-black text-foreground font-serif tracking-tight">{t('settings.title')}</h1>
       </div>
 
-      {message && (
-        <div className={`p-4 border rounded-xl text-sm font-semibold ${
-          message.type === 'success' 
-            ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' 
-            : 'bg-destructive/10 text-destructive border-destructive/20'
-        }`}>
-          {message.text}
+      {/* 1. Profile Information Card */}
+      <section className="bg-card border border-border rounded-2xl p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex items-center gap-2">
+          <User className="w-5 h-5 text-foreground" />
+          <h2 className="text-xl font-bold text-foreground font-serif leading-none">{t('settings.profileInfo')}</h2>
         </div>
-      )}
 
-      
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">👤 Personal Information</h2>
-        <form onSubmit={handleUpdateProfile} className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold text-foreground mb-2">Registered Email</label>
-            <input 
-              type="text" 
-              disabled 
-              value={user?.email || ''} 
-              className="w-full border border-border rounded-xl px-4 py-3 bg-muted text-muted-foreground cursor-not-allowed text-base" 
-            />
+        <div className="flex items-center gap-5 pt-2">
+
+          {/* User Avatar Circle */}
+          <div className="w-16 h-16 rounded-full bg-[#E65F00] flex items-center justify-center text-white text-2xl font-black shrink-0 shadow-sm select-none">
+            {(profile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'G').toUpperCase()}
           </div>
-          <div>
-            <label className="block text-sm font-bold text-foreground mb-2">Display Name</label>
-            <input 
-              type="text" 
-              required
-              value={fullName} 
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Jane Doe" 
-              className="w-full border border-border rounded-xl px-4 py-3 bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 text-base" 
-            />
+          
+          <div className="space-y-1">
+            <span className="font-bold text-lg block text-foreground leading-snug">
+              {profile?.full_name || (user?.email ? user.email.split('@')[0] : (t('landing.workflowTitle').includes('प्रक्रिया') ? 'अतिथि उपयोगकर्ता' : 'Guest User'))}
+            </span>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Mail className="w-4 h-4" />
+              <span className="text-sm font-semibold leading-none">
+                {user?.is_anonymous ? (t('landing.workflowTitle').includes('प्रक्रिया') ? 'कोई ईमेल नहीं (अनाम अतिथि)' : 'No email (Anonymous Guest)') : (user?.email || (t('landing.workflowTitle').includes('प्रक्रिया') ? 'कोई ईमेल संबद्ध नहीं है' : 'No email associated'))}
+              </span>
+            </div>
           </div>
-          <button 
-            type="submit"
-            disabled={updating}
-            className="bg-primary text-primary-foreground font-bold px-6 py-3 rounded-xl hover:opacity-95 transition-all text-sm cursor-pointer disabled:opacity-50"
-          >
-            {updating ? "Saving Changes..." : "Save Profile Details"}
-          </button>
-        </form>
-      </section>
-
-      
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">👓 Accessibility & Themes</h2>
-        <div className="space-y-5">
-          <label className="flex items-center justify-between p-3 rounded-xl border border-border hover:bg-muted/10 cursor-pointer">
-            <div>
-              <span className="font-extrabold block text-foreground">Large Text Size</span>
-              <span className="text-xs text-muted-foreground">Increases letter spacing & font scaling for legibility.</span>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={largeText}
-              onChange={(e) => setLargeText(e.target.checked)}
-              className="w-6 h-6 accent-primary cursor-pointer" 
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-3 rounded-xl border border-border hover:bg-muted/10 cursor-pointer">
-            <div>
-              <span className="font-extrabold block text-foreground">High Contrast Mode</span>
-              <span className="text-xs text-muted-foreground">Sleek stark black/white outlines optimized for visual impairments.</span>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={highContrast}
-              onChange={(e) => setHighContrast(e.target.checked)}
-              className="w-6 h-6 accent-primary cursor-pointer" 
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-3 rounded-xl border border-border hover:bg-muted/10 cursor-pointer">
-            <div>
-              <span className="font-extrabold block text-foreground">Dark Theme Layout</span>
-              <span className="text-xs text-muted-foreground">Reduces eye strain under low light settings.</span>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={darkMode}
-              onChange={(e) => setDarkMode(e.target.checked)}
-              className="w-6 h-6 accent-primary cursor-pointer" 
-            />
-          </label>
         </div>
       </section>
 
-      
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-foreground mb-6 pb-2 border-b border-border">🛡️ Data Management & DPDP Rights</h2>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-border rounded-xl gap-4">
-            <div>
-              <span className="font-extrabold block text-foreground">Export My Records</span>
-              <span className="text-xs text-muted-foreground">Download a complete structured JSON copy of all scans and files.</span>
+      {/* 2. Display Settings Card */}
+      <section className="bg-card border border-border rounded-2xl p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex items-center gap-2">
+          <Settings className="w-5 h-5 text-foreground" />
+          <h2 className="text-xl font-bold text-foreground font-serif leading-none">{t('settings.displaySettings')}</h2>
+        </div>
+
+        <p className="text-muted-foreground text-sm font-semibold">
+          {t('settings.displaySub')}
+        </p>
+
+        {/* Accessibility sub-card */}
+        <div className="border border-border rounded-2xl p-5 flex justify-between items-center bg-card">
+          <div className="space-y-1">
+            <span className="font-bold text-sm block text-foreground font-serif leading-normal">
+              {t('settings.accessibilityTitle')}
+            </span>
+            <p className="text-xs text-muted-foreground font-semibold leading-normal">
+              {t('settings.accessibilitySub')}
+            </p>
+          </div>
+          
+          <div className="relative">
+            <button
+              onClick={() => setIsAccessPopoverOpen(!isAccessPopoverOpen)}
+              className="p-3 bg-secondary/50 border border-border rounded-2xl flex items-center justify-center cursor-pointer hover:bg-secondary/80 transition-all shrink-0"
+              aria-label="Toggle Accessibility Preferences"
+            >
+              <Sliders className="w-5 h-5 text-foreground" />
+            </button>
+
+            <AccessibilityPopover
+              isOpen={isAccessPopoverOpen}
+              onClose={() => setIsAccessPopoverOpen(false)}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Data Management & Session Card */}
+      <section className="bg-card border border-border rounded-2xl p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <Database className="w-5 h-5 text-foreground" />
+          <h2 className="text-xl font-bold text-foreground font-serif leading-none">{t('settings.dataMgmt')}</h2>
+        </div>
+
+        <div className="divide-y divide-border">
+          {/* Row 1: Export My Records */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 first:pt-0 gap-4">
+            <div className="space-y-1">
+              <span className="font-bold text-sm block text-foreground">{t('settings.exportTitle')}</span>
+              <span className="text-xs text-muted-foreground block">{t('settings.exportText')}</span>
             </div>
             <button 
               onClick={handleExportData}
-              className="bg-secondary text-secondary-foreground font-bold px-4 py-2 border border-border rounded-lg hover:bg-muted cursor-pointer text-xs w-full sm:w-auto"
+              className="bg-secondary text-secondary-foreground font-bold px-4 py-2 border border-border rounded-full hover:bg-muted cursor-pointer text-xs w-full sm:w-auto shrink-0 transition-all active:scale-[0.98] text-center"
             >
-              📥 Export JSON
+              {t('settings.exportBtn')}
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-border rounded-xl gap-4">
-            <div>
-              <span className="font-extrabold block text-foreground">Clear Upload History</span>
-              <span className="text-xs text-muted-foreground">Wipe all scans, files, and generated medical reviews permanently.</span>
+          {/* Row 2: Clear Upload History */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 gap-4 bg-rose-500/[0.02] -mx-6 md:-mx-8 px-6 md:px-8 border-y border-border/80">
+            <div className="space-y-1">
+              <span className="font-bold text-sm block text-rose-600 dark:text-rose-400">{t('settings.clearTitle')}</span>
+              <span className="text-xs text-muted-foreground block">{t('settings.clearText')}</span>
             </div>
             <button 
               onClick={handleClearDocuments}
-              className="bg-destructive/10 text-destructive font-bold px-4 py-2 rounded-lg hover:bg-destructive/20 cursor-pointer text-xs w-full sm:w-auto"
+              className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-bold px-4 py-2 rounded-full hover:bg-rose-500/20 cursor-pointer text-xs w-full sm:w-auto shrink-0 transition-all active:scale-[0.98] text-center"
             >
-              🗑️ Clear Records
+              {t('settings.clearBtn')}
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-destructive/20 bg-destructive/5 rounded-xl gap-4">
-            <div>
-              <span className="font-extrabold block text-destructive">Delete My Account</span>
-              <span className="text-xs text-muted-foreground">Permanently wipe profile authorization parameters and right to be forgotten.</span>
+          {/* Row 3: Sign Out */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 last:pb-0 gap-4">
+            <div className="space-y-1">
+              <span className="font-bold text-sm block text-foreground">{t('settings.signOutTitle')}</span>
+              <span className="text-xs text-muted-foreground block">{t('settings.signOutText')}</span>
             </div>
             <button 
-              onClick={handleDeleteAccount}
-              className="bg-destructive text-destructive-foreground font-bold px-4 py-2 rounded-lg hover:opacity-90 cursor-pointer text-xs w-full sm:w-auto"
+              onClick={async () => {
+                await signOut()
+                navigate({ to: '/' })
+              }}
+              className="bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full hover:opacity-95 cursor-pointer text-xs w-full sm:w-auto shrink-0 transition-all active:scale-[0.98] text-center flex items-center justify-center gap-1.5"
             >
-              ⚠️ Delete Account
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{t('settings.signOutBtn')}</span>
             </button>
           </div>
         </div>
       </section>
+
     </div>
   )
 }

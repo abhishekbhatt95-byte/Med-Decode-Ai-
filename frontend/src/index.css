@@ -5,48 +5,48 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(0.99 0.005 240);
-  --foreground: oklch(0.15 0.015 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.015 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.015 240);
-  --primary: oklch(0.38 0.17 254);
-  --primary-foreground: oklch(0.99 0.005 240);
-  --secondary: oklch(0.96 0.01 240);
-  --secondary-foreground: oklch(0.2 0.02 240);
-  --muted: oklch(0.96 0.01 240);
-  --muted-foreground: oklch(0.45 0.02 240);
-  --accent: oklch(0.96 0.01 240);
-  --accent-foreground: oklch(0.2 0.02 240);
+  --background: oklch(0.985 0.005 85); /* #FAF7F0 Warm Cream */
+  --foreground: oklch(0.24 0.025 220); /* #1B2A33 Dark Navy */
+  --card: oklch(1.0 0.002 85); /* White */
+  --card-foreground: oklch(0.24 0.025 220);
+  --popover: oklch(1.0 0.002 85);
+  --popover-foreground: oklch(0.24 0.025 220);
+  --primary: oklch(0.46 0.12 165); /* #0F6E56 Teal */
+  --primary-foreground: oklch(0.985 0.005 85);
+  --secondary: oklch(0.935 0.008 85); /* #EFECE5 Soft Warm Grey */
+  --secondary-foreground: oklch(0.24 0.025 220);
+  --muted: oklch(0.935 0.008 85);
+  --muted-foreground: oklch(0.48 0.03 220); /* #596D7A Slate-Navy */
+  --accent: oklch(0.92 0.01 85); /* #EBE8E0 Darker Soft Cream */
+  --accent-foreground: oklch(0.24 0.025 220);
   --destructive: oklch(0.55 0.22 28);
-  --destructive-foreground: oklch(0.99 0.005 240);
-  --border: oklch(0.92 0.01 240);
-  --input: oklch(0.92 0.01 240);
-  --ring: oklch(0.38 0.17 254 / 0.2);
+  --destructive-foreground: oklch(0.985 0.005 85);
+  --border: oklch(0.91 0.008 85); /* #E6E3DB Light border */
+  --input: oklch(0.91 0.008 85);
+  --ring: oklch(0.46 0.12 165 / 0.2);
   --radius: 1rem;
 }
 
 .dark {
-  --background: oklch(0.13 0.015 240);
-  --foreground: oklch(0.97 0.01 240);
-  --card: oklch(0.16 0.015 240);
-  --card-foreground: oklch(0.97 0.01 240);
-  --popover: oklch(0.16 0.015 240);
-  --popover-foreground: oklch(0.97 0.01 240);
-  --primary: oklch(0.55 0.18 254);
-  --primary-foreground: oklch(0.1 0.01 240);
-  --secondary: oklch(0.22 0.015 240);
-  --secondary-foreground: oklch(0.97 0.01 240);
-  --muted: oklch(0.22 0.015 240);
-  --muted-foreground: oklch(0.65 0.02 240);
-  --accent: oklch(0.22 0.015 240);
-  --accent-foreground: oklch(0.97 0.01 240);
+  --background: oklch(0.18 0.025 220); /* #111C24 Deep Navy background */
+  --foreground: oklch(0.935 0.008 85); /* #EFECE5 Light warm cream foreground */
+  --card: oklch(0.24 0.025 220); /* #1B2A33 Dark navy card */
+  --card-foreground: oklch(0.935 0.008 85);
+  --popover: oklch(0.24 0.025 220);
+  --popover-foreground: oklch(0.935 0.008 85);
+  --primary: oklch(0.58 0.14 165); /* #139C7A Brighter Teal for high-contrast dark mode */
+  --primary-foreground: oklch(0.18 0.025 220);
+  --secondary: oklch(0.24 0.025 220);
+  --secondary-foreground: oklch(0.935 0.008 85);
+  --muted: oklch(0.24 0.025 220);
+  --muted-foreground: oklch(0.65 0.025 220); /* #7E96A6 Slate-grey-blue */
+  --accent: oklch(0.24 0.025 220);
+  --accent-foreground: oklch(0.935 0.008 85);
   --destructive: oklch(0.45 0.18 28);
-  --destructive-foreground: oklch(0.97 0.01 240);
-  --border: oklch(0.25 0.015 240);
-  --input: oklch(0.25 0.015 240);
-  --ring: oklch(0.55 0.18 254 / 0.4);
+  --destructive-foreground: oklch(0.935 0.008 85);
+  --border: oklch(0.28 0.025 220); /* #233543 dark border */
+  --input: oklch(0.28 0.025 220);
+  --ring: oklch(0.58 0.14 165 / 0.4);
 }
 
 @theme inline {
@@ -72,9 +72,29 @@
   --border-radius-lg: var(--radius);
   --border-radius-md: calc(var(--radius) - 4px);
   --border-radius-sm: calc(var(--radius) - 8px);
+  --font-serif: "Lora", Georgia, serif;
+
+  /* Global scale and spacing boost */
+  --spacing: 0.28rem;
+
+  /* Global typography step-up */
+  --font-size-xs: 0.875rem;
+  --font-size-sm: 1rem;
+  --font-size-base: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 1.875rem;
+  --font-size-3xl: 2.25rem;
+  --font-size-4xl: 3rem;
+  --font-size-5xl: 3.75rem;
+  --font-size-6xl: 4.5rem;
+  --font-size-7xl: 6rem;
 }
 
 @layer base {
+  html {
+    font-size: 17px;
+  }
   * {
     @apply border-border outline-ring/50 transition-colors duration-200;
   }
@@ -82,6 +102,9 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6, .serif-heading {
+    font-family: "Lora", Georgia, serif;
   }
 }
 
@@ -107,6 +130,15 @@
 
 .animate-scan {
   animation: scan 2.5s linear infinite;
+}
+
+/* High contrast overrides for full-bleed hero scrim and text */
+.accessibility-high-contrast .hero-scrim {
+  background: black !important;
+}
+
+.accessibility-high-contrast .hero-text-light {
+  color: white !important;
 }
 
 /* Responsive Printing Style overrides for clean PDF Exports */

@@ -1,6 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8"
 import { getCorsHeaders } from "../_shared/cors.ts"
+import {
+  errorResponse,
+  successResponse,
+  logFailure,
+  logRequest,
+  getClientIp,
+  validateTokenFormat,
+  createServiceClient,
+} from "../_shared/security.ts"
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -9,19 +17,29 @@ serve(async (req) => {
   }
 
   try {
+    const supabase = createServiceClient()
+    const clientIp = getClientIp(req)
+
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    const { count, error: rateErr } = await supabase
+      .from('request_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('endpoint', 'shared-result')
+      .eq('ip_address', clientIp)
+      .gt('created_at', fifteenMinutesAgo)
+
+    if (!rateErr && count !== null && count >= 30) {
+      return errorResponse('Too many requests. Please try again later.', 429, corsHeaders)
+    }
+
+    await logRequest(supabase, null, 'shared-result', clientIp)
+
     const url = new URL(req.url)
     const token = url.searchParams.get('token')
 
-    if (!token || typeof token !== 'string' || token.trim().length === 0) {
-      return new Response(JSON.stringify({ error: 'Token is required.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!token || !validateTokenFormat(token)) {
+      return errorResponse('Invalid or missing share token.', 400, corsHeaders)
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const now = new Date().toISOString()
     const { data: link, error: linkError } = await supabase
@@ -32,10 +50,7 @@ serve(async (req) => {
       .maybeSingle()
 
     if (linkError || !link) {
-      return new Response(JSON.stringify({ error: 'Link has expired or is invalid.' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse('This link has expired or is invalid.', 404, corsHeaders)
     }
 
     const { data: doc, error: docError } = await supabase
@@ -45,10 +60,7 @@ serve(async (req) => {
       .single()
 
     if (docError || !doc) {
-      return new Response(JSON.stringify({ error: 'Document not found.' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse('Document not found.', 404, corsHeaders)
     }
 
     const { data: analyses, error: analysisError } = await supabase
@@ -59,10 +71,7 @@ serve(async (req) => {
       .limit(1)
 
     if (analysisError || !analyses || analyses.length === 0) {
-      return new Response(JSON.stringify({ error: 'Analysis not found.' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse('Analysis not found.', 404, corsHeaders)
     }
 
     const analysis = analyses[0]
@@ -72,16 +81,9 @@ serve(async (req) => {
       .select('*')
       .eq('analysis_id', analysis.id)
 
-    return new Response(JSON.stringify({ doc, analysis, medicines }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
-  } catch (err) {
-    console.error('Shared-result function error:', err)
-    return new Response(JSON.stringify({ error: 'Internal server error.' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return successResponse({ doc, analysis, medicines }, corsHeaders)
+  } catch (err: any) {
+    logFailure('shared-result', null, err.message)
+    return errorResponse('Something went wrong. Please try again.', 500, getCorsHeaders(req))
   }
 })

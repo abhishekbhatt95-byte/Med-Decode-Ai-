@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../context/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 export const ConsentPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
+  const { t } = useTranslation()
+
   
   
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -71,7 +74,11 @@ export const ConsentPage: React.FC = () => {
 
   const handleAccept = async () => {
     if (!termsAccepted || !privacyAccepted || !aiAccepted) {
-      setErrorMsg("You must accept all terms, policies, and disclosures to proceed.")
+      setErrorMsg(
+        t('landing.workflowTitle').includes('प्रक्रिया')
+          ? 'आगे बढ़ने के लिए आपको सभी शर्तों, नीतियों और खुलासे को स्वीकार करना होगा।'
+          : 'You must accept all terms, policies, and disclosures to proceed.'
+      )
       return
     }
 
@@ -122,7 +129,10 @@ export const ConsentPage: React.FC = () => {
       
       navigate({ to: '/dashboard' })
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to record consent. Please try again.")
+      setErrorMsg(
+        err.message || 
+        (t('landing.workflowTitle').includes('प्रक्रिया') ? 'सहमति दर्ज करने में विफल। कृपया पुन: प्रयास करें।' : 'Failed to record consent. Please try again.')
+      )
     } finally {
       setSubmitting(false)
     }
@@ -132,7 +142,9 @@ export const ConsentPage: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-muted-foreground">Checking authorization details...</p>
+        <p className="text-muted-foreground">
+          {t('landing.workflowTitle').includes('प्रक्रिया') ? 'प्राधिकरण विवरण की जाँच की जा रही है...' : 'Checking authorization details...'}
+        </p>
       </div>
     )
   }
@@ -142,8 +154,8 @@ export const ConsentPage: React.FC = () => {
       <div className="bg-card border border-border rounded-2xl shadow-xl p-8 w-full">
         <div className="text-center mb-6">
           <span className="text-4xl">📋</span>
-          <h1 className="text-3xl font-extrabold text-foreground mt-2">Terms & Privacy Consent</h1>
-          <p className="text-muted-foreground text-sm mt-1">Please review and accept to unlock medical document analysis</p>
+          <h1 className="text-3xl font-extrabold text-foreground mt-2">{t('consent.title')}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('consent.subtitle')}</p>
         </div>
 
         {errorMsg && (
@@ -155,30 +167,30 @@ export const ConsentPage: React.FC = () => {
         <div className="space-y-6 mb-8 text-neutral-600 dark:text-neutral-300 text-sm md:text-base max-h-80 overflow-y-auto border border-border rounded-xl p-5 bg-muted/30">
           
           <section>
-            <h3 className="font-bold text-foreground mb-1 text-base">1. Educational & Informational Purpose</h3>
+            <h3 className="font-bold text-foreground mb-1 text-base">{t('consent.faq1Q')}</h3>
             <p className="leading-relaxed">
-              MedDecode AI provides automatic translations of medical records. **This application does not diagnose diseases, recommend treatment, prescribe medicines, or replace human doctors.** Always consult a qualified healthcare professional regarding any clinical concerns.
+              {t('consent.faq1A')}
             </p>
           </section>
 
           <section>
-            <h3 className="font-bold text-foreground mb-1 text-base">2. Encryption & Security</h3>
+            <h3 className="font-bold text-foreground mb-1 text-base">{t('consent.faq2Q')}</h3>
             <p className="leading-relaxed">
-              Your medical documents are processed securely and stored in encrypted private storage buckets. We implement Row Level Security (RLS) policies to prevent cross-user data access. Your records will never be made public.
+              {t('consent.faq2A')}
             </p>
           </section>
 
           <section>
-            <h3 className="font-bold text-foreground mb-1 text-base">3. AI Disclosure</h3>
+            <h3 className="font-bold text-foreground mb-1 text-base">{t('consent.faq3Q')}</h3>
             <p className="leading-relaxed">
-              We leverage advanced language processing technology (OpenAI API) to read, categorize, and explain medical reports. AI models can occasionally produce inaccuracies or incomplete translations. All output must be verified with certified sources.
+              {t('consent.faq3A')}
             </p>
           </section>
 
           <section>
-            <h3 className="font-bold text-foreground mb-1 text-base">4. Data Deletion Rights</h3>
+            <h3 className="font-bold text-foreground mb-1 text-base">{t('consent.faq4Q')}</h3>
             <p className="leading-relaxed">
-              In compliance with DPDP data privacy standards, you hold full ownership of your data. You can completely and permanently delete any document, analysis, or your entire account at any point via your Profile page.
+              {t('consent.faq4A')}
             </p>
           </section>
         </div>
@@ -193,7 +205,7 @@ export const ConsentPage: React.FC = () => {
               className="w-5 h-5 mt-0.5 accent-primary cursor-pointer"
             />
             <span className="text-sm font-medium text-foreground">
-              I accept the **Terms of Service** and educational disclaimer.
+              {t('consent.chkTerms')}
             </span>
           </label>
 
@@ -205,7 +217,7 @@ export const ConsentPage: React.FC = () => {
               className="w-5 h-5 mt-0.5 accent-primary cursor-pointer"
             />
             <span className="text-sm font-medium text-foreground">
-              I consent to the secure, encrypted **Processing and Storage** of my uploaded medical documents.
+              {t('consent.chkPrivacy')}
             </span>
           </label>
 
@@ -217,7 +229,7 @@ export const ConsentPage: React.FC = () => {
               className="w-5 h-5 mt-0.5 accent-primary cursor-pointer"
             />
             <span className="text-sm font-medium text-foreground">
-              I acknowledge the **AI Disclosure** regarding automated machine translations.
+              {t('consent.chkAi')}
             </span>
           </label>
         </div>
@@ -228,17 +240,18 @@ export const ConsentPage: React.FC = () => {
             disabled={submitting}
             className="flex-1 bg-secondary text-secondary-foreground font-semibold px-6 py-3.5 rounded-xl border border-border hover:bg-muted transition-all cursor-pointer text-base disabled:opacity-50"
           >
-            Decline & Sign Out
+            {t('consent.btnDecline')}
           </button>
           <button
             onClick={handleAccept}
             disabled={submitting}
             className="flex-1 bg-primary text-primary-foreground font-semibold px-6 py-3.5 rounded-xl hover:opacity-90 transition-all cursor-pointer text-base disabled:opacity-50"
           >
-            {submitting ? "Agreeing..." : "Accept & Proceed"}
+            {submitting ? t('consent.btnAgreeing') : t('consent.btnAccept')}
           </button>
         </div>
       </div>
     </div>
+
   )
 }

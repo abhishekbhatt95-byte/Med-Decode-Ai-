@@ -1,20 +1,32 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { getCorsHeaders } from '../_shared/cors.ts'
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import {
+  authenticateRequest,
+  enforceRequestSize,
+  sanitizeUserInput,
+  escapeHtml,
+  enforceReplayProtection,
+  logRequest,
+  fetchWithGuard,
+  errorResponse,
+  successResponse,
+  logFailure,
+  getClientIp,
+  isValidUUID,
+  createServiceClient,
+} from '../_shared/security.ts'
 
 const MODEL_MAP: Record<string, string> = {
   standard: 'gemini-3.5-flash',
   fast_lite: 'gemini-3.1-flash-lite',
-  deep_pro: 'gemini-3.1-pro'
+  deep_pro: 'gemini-3.1-pro',
 }
 
 const ROLE_MAP: Record<string, string> = {
   default_clinical: `You are a medical assistant helping a patient understand their medical document. Explain findings in plain English.`,
   empathetic_advocate: `You are a warm, empathetic advocate. Use simple language, reduce anxiety, and avoid clinical jargon. Focus on comforting and guiding the patient.`,
   peer_physician: `You are a peer physician consulting with another practitioner. Use professional terminology, discuss differential diagnoses, evidence-oriented reasoning, and clearly label any uncertainty.`,
-  billing_negotiator: `You are a billing negotiator analyzing a medical bill. Find potentially suspicious or duplicate charges, suggest dispute questions, but never claim fraud and never give legal advice.`
+  billing_negotiator: `You are a billing negotiator analyzing a medical bill. Find potentially suspicious or duplicate charges, suggest dispute questions, but never claim fraud and never give legal advice.`,
 }
 
 const DISCLAIMER = "This information is educational and is not a substitute for professional medical advice."
@@ -25,91 +37,84 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  try {
-    const { conversationId, message, modelKey, roleKey, analysisId } = await req.json()
+  let userId: string | null = null
 
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: 'Message is required.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+  try {
+    const sizeErr = enforceRequestSize(req, 51200)
+    if (sizeErr) return errorResponse(sizeErr, 413, corsHeaders)
+
+    const supabase = createServiceClient()
+
+    const auth = await authenticateRequest(req, supabase)
+    if (auth.error) return errorResponse(auth.error, 401, corsHeaders)
+    userId = auth.userId
+
+    let body: any
+    try {
+      body = await req.json()
+    } catch (_) {
+      return errorResponse('Malformed JSON payload.', 400, corsHeaders)
     }
 
+    const { conversationId, message, modelKey, roleKey, analysisId } = body
+
+    const sanitized = sanitizeUserInput(message, 2000)
+    if (sanitized.rejected) {
+      return errorResponse(sanitized.reason || 'Invalid message.', 400, corsHeaders)
+    }
+    const cleanMessage = sanitized.clean
+
     if (!modelKey || !MODEL_MAP[modelKey]) {
-      return new Response(JSON.stringify({ error: `Unknown modelKey: ${modelKey}` }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse(`Unknown model selection.`, 400, corsHeaders)
     }
 
     const roleKeyNormalized = roleKey || 'default_clinical'
     if (!ROLE_MAP[roleKeyNormalized]) {
-      return new Response(JSON.stringify({ error: `Unknown roleKey: ${roleKey}` }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse(`Unknown persona selection.`, 400, corsHeaders)
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header.' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    const clientIp = getClientIp(req)
+    const isReplay = await enforceReplayProtection(supabase, userId, 'copilot', 5000)
+    if (isReplay) {
+      return errorResponse('Too many requests. Please wait a few seconds.', 429, corsHeaders)
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
+    await logRequest(supabase, userId, 'copilot', clientIp)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser(token)
-    if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const userId = userData.user.id
     const modelUsed = MODEL_MAP[modelKey]
 
     const today = new Date().toISOString().split('T')[0]
     const capMap: Record<string, number> = {
       standard: 40,
       fast_lite: 100,
-      deep_pro: 10
+      deep_pro: 10,
     }
     const cap = capMap[modelKey]
     const featureName = `copilot_${modelKey}`
 
-    const { data: allowed, error: usageErr } = await supabase
-      .rpc('try_increment_daily_usage', {
-        p_user_id: userId,
-        p_date: today,
-        p_cap: cap,
-        p_feature: featureName
-      })
+    const { data: allowed, error: usageErr } = await supabase.rpc('try_increment_daily_usage', {
+      p_user_id: userId,
+      p_date: today,
+      p_cap: cap,
+      p_feature: featureName,
+    })
 
     if (usageErr) {
-      console.error("Failed to check and increment usage limits:", usageErr.message)
+      logFailure('copilot', userId, `Usage check failed: ${usageErr.message}`)
     } else if (!allowed) {
-      return new Response(JSON.stringify({ error: `Daily limit exceeded for ${modelKey}. Limit is ${cap} requests per day.` }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return errorResponse(
+        `Daily limit reached for this model. You can send up to ${cap} messages per day.`,
+        429,
+        corsHeaders
+      )
     }
 
     let conversationIdValue = conversationId
     let analysisIdValue = analysisId
 
     if (conversationIdValue) {
-      if (!UUID_REGEX.test(conversationIdValue)) {
-        return new Response(JSON.stringify({ error: 'Invalid conversationId.' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+      if (!isValidUUID(conversationIdValue)) {
+        return errorResponse('Invalid conversation ID.', 400, corsHeaders)
       }
 
       const { data: conv, error: convErr } = await supabase
@@ -119,17 +124,11 @@ serve(async (req) => {
         .single()
 
       if (convErr || !conv) {
-        return new Response(JSON.stringify({ error: 'Conversation not found.' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return errorResponse('Conversation not found.', 404, corsHeaders)
       }
 
       if (conv.user_id !== userId) {
-        return new Response(JSON.stringify({ error: 'Access denied.' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return errorResponse('Access denied.', 403, corsHeaders)
       }
 
       if (conv.analysis_id) {
@@ -142,16 +141,14 @@ serve(async (req) => {
           user_id: userId,
           analysis_id: analysisIdValue || null,
           role_persona: roleKeyNormalized,
-          title: 'New Conversation'
+          title: 'New Conversation',
         })
         .select('id')
         .single()
 
       if (newConvErr || !newConv) {
-        return new Response(JSON.stringify({ error: 'Failed to create conversation.' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        logFailure('copilot', userId, `Failed to create conversation: ${newConvErr?.message}`)
+        return errorResponse('Failed to create conversation.', 500, corsHeaders)
       }
 
       conversationIdValue = newConv.id
@@ -161,21 +158,59 @@ serve(async (req) => {
     if (analysisIdValue) {
       const { data: analysis } = await supabase
         .from('analyses')
-        .select('summary, structured_output')
+        .select('summary, structured_output, doctor_questions, document_id')
         .eq('id', analysisIdValue)
         .single()
 
       if (analysis) {
         const { data: medicines } = await supabase
           .from('medicines')
-          .select('brand_name, generic_name, category, common_uses')
+          .select(
+            'brand_name, generic_name, category, common_uses, how_it_works, side_effects, food_restrictions, precautions'
+          )
           .eq('analysis_id', analysisIdValue)
 
-        analysisContext = `Medical Analysis Context:
-Summary: ${analysis.summary}
-Medicines: ${JSON.stringify(medicines || [])}
-Abnormal Values: ${JSON.stringify(analysis.structured_output?.abnormalValues || [])}
-Sections: ${JSON.stringify(analysis.structured_output?.sections || [])}`
+        let docMeta: any = null
+        if (analysis.document_id) {
+          const { data: doc } = await supabase
+            .from('documents')
+            .select('name, document_type, created_at')
+            .eq('id', analysis.document_id)
+            .single()
+          docMeta = doc
+        }
+
+        const so = analysis.structured_output || {}
+        const abnormals = so.abnormalValues || []
+        const sections = so.sections || []
+        const medSummary = so.medicalSummary || ''
+
+        const docTypePretty = (docMeta?.document_type || 'unknown').replace(/_/g, ' ')
+        const docDate = docMeta?.created_at
+          ? new Date(docMeta.created_at).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })
+          : 'Unknown'
+
+        analysisContext = `
+=== PATIENT REPORT CONTEXT (INVISIBLE TO USER — DO NOT REPEAT VERBATIM) ===
+
+DOCUMENT METADATA:
+- Document Name: ${docMeta?.name || 'Uploaded Document'}
+- Document Type: ${docTypePretty}
+- Upload Date: ${docDate}
+
+GENERAL SUMMARY:
+${analysis.summary}
+
+${medSummary ? `CLINICAL SUMMARY:\n${medSummary}\n` : ''}
+${abnormals.length > 0 ? `ABNORMAL / FLAGGED FINDINGS:\n${abnormals.map((a: any) => `- ${a.parameter}: ${a.value} (Normal range: ${a.referenceRange}) — ${a.explanation}`).join('\n')}\n` : ''}
+${sections.length > 0 ? `DETECTED CONDITIONS & EXPLANATIONS:\n${sections.map((s: any) => `- ${s.title}: ${s.content}`).join('\n')}\n` : ''}
+${medicines && medicines.length > 0 ? `PRESCRIBED MEDICINES:\n${medicines.map((m: any) => `- ${m.brand_name} (${m.generic_name || 'N/A'}): ${m.common_uses || 'N/A'}. Side effects: ${m.side_effects || 'N/A'}. Food: ${m.food_restrictions || 'N/A'}. Precautions: ${m.precautions || 'N/A'}.`).join('\n')}\n` : ''}
+${analysis.doctor_questions && analysis.doctor_questions.length > 0 ? `SUGGESTED DOCTOR QUESTIONS:\n${analysis.doctor_questions.map((q: string) => `- ${q}`).join('\n')}\n` : ''}
+=== END OF REPORT CONTEXT ===`
       }
     }
 
@@ -183,7 +218,16 @@ Sections: ${JSON.stringify(analysis.structured_output?.sections || [])}`
     const systemPrompt = `${rolePrompt}
 ${analysisContext}
 
-Ensure your answers are accurate to the medical document context if provided. If asked about a medicine/finding not in this document, advise consulting their doctor. Remind them you are an AI and they should consult their doctor for clinical decisions. Do not use markdown.`
+STRICT RULES — FOLLOW AT ALL TIMES:
+1. PRIORITIZE REPORT CONTENTS: Always answer using the patient's actual report data above. The report context is your primary source of truth.
+2. NEVER INVENT VALUES: Do not fabricate lab values, dosages, parameters, or findings. If a value is not present in the report context, say "this was not found in your report."
+3. SEPARATE YOUR RESPONSE INTO CLEAR CATEGORIES:
+   - REPORT FACTS: Direct observations from the document (e.g., "Your hemoglobin is 10.2 g/dL, which is below the normal range of 12-16 g/dL").
+   - INTERPRETATION: What these findings may indicate in clinical context (e.g., "This could suggest mild anemia").
+   - GENERAL EDUCATION: Broader context that is not specific to this report (e.g., "Anemia can be caused by iron deficiency, chronic disease, or blood loss").
+   Always clearly distinguish between what the report says vs. your clinical interpretation vs. general medical knowledge.
+4. The report context above is INVISIBLE to the user. Never say "based on the context I was given" — instead say "based on your report" or "according to your document."
+5. You are an AI assistant. Remind the user that clinical decisions must involve their doctor. Do not use markdown formatting.`
 
     const { data: dbMessages } = await supabase
       .from('chat_messages')
@@ -194,11 +238,12 @@ Ensure your answers are accurate to the medical document context if provided. If
     const geminiMessages: { role: 'user' | 'model'; parts: { text: string }[] }[] = []
 
     if (dbMessages && dbMessages.length > 0) {
-      const chatHistory = dbMessages.filter(m => m.role === 'user' || m.role === 'assistant')
+      const chatHistory = dbMessages.filter((m) => m.role === 'user' || m.role === 'assistant')
 
       if (chatHistory.length > 0) {
         const firstUser = chatHistory[0].role === 'user' ? chatHistory[0] : null
-        const firstModel = (chatHistory.length > 1 && chatHistory[1].role === 'assistant') ? chatHistory[1] : null
+        const firstModel =
+          chatHistory.length > 1 && chatHistory[1].role === 'assistant' ? chatHistory[1] : null
 
         let startIdx = 0
         if (firstUser) startIdx = 1
@@ -211,7 +256,7 @@ Ensure your answers are accurate to the medical document context if provided. If
         for (let i = recentHistory.length - 1; i >= 0; i--) {
           const msg = recentHistory[i]
           const msgTokens = Math.ceil(msg.content.length / 4)
-          if (keptRecent.length >= 16 || (totalTokens + msgTokens) > 8000) {
+          if (keptRecent.length >= 16 || totalTokens + msgTokens > 8000) {
             break
           }
           keptRecent.unshift(msg)
@@ -225,7 +270,8 @@ Ensure your answers are accurate to the medical document context if provided. If
           geminiMessages.push({ role: 'model', parts: [{ text: firstModel.content }] })
         }
 
-        let lastRole = geminiMessages.length > 0 ? geminiMessages[geminiMessages.length - 1].role : null
+        let lastRole =
+          geminiMessages.length > 0 ? geminiMessages[geminiMessages.length - 1].role : null
 
         for (const msg of keptRecent) {
           const gRole = msg.role === 'user' ? 'user' : 'model'
@@ -238,20 +284,18 @@ Ensure your answers are accurate to the medical document context if provided. If
       }
     }
 
-    await supabase
-      .from('chat_messages')
-      .insert({
-        conversation_id: conversationIdValue,
-        role: 'user',
-        content: message,
-        model_used: modelUsed,
-        token_count: Math.ceil(message.length / 4),
-        status: 'completed'
-      })
+    await supabase.from('chat_messages').insert({
+      conversation_id: conversationIdValue,
+      role: 'user',
+      content: cleanMessage,
+      model_used: modelUsed,
+      token_count: Math.ceil(cleanMessage.length / 4),
+      status: 'completed',
+    })
 
     geminiMessages.push({
       role: 'user',
-      parts: [{ text: message }]
+      parts: [{ text: cleanMessage }],
     })
 
     const geminiKey = Deno.env.get('GEMINI_API_KEY')!
@@ -264,37 +308,43 @@ Ensure your answers are accurate to the medical document context if provided. If
       if (completed) return
       completed = true
       if (accumulatedAnswer.trim()) {
-        const partialAnswer = `${accumulatedAnswer.trim()}\n\n[Interrupted] ${DISCLAIMER}`
+        const partialAnswer = escapeHtml(`${accumulatedAnswer.trim()}\n\n[Interrupted] ${DISCLAIMER}`)
         await supabase.from('chat_messages').insert({
           conversation_id: conversationIdValue,
           role: 'assistant',
           content: partialAnswer,
           model_used: modelUsed,
           token_count: Math.ceil(partialAnswer.length / 4),
-          status: 'cancelled'
+          status: 'cancelled',
         })
       }
     }
 
     req.signal.addEventListener('abort', handleAbort)
 
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: geminiMessages,
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 800
-        }
-      })
-    })
+    const { response, error: fetchErr } = await fetchWithGuard(
+      geminiUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: geminiMessages,
+          systemInstruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1200,
+          },
+        }),
+      },
+      30000,
+      2
+    )
 
-    if (!response.ok) {
-      throw new Error(`Gemini stream error: ${await response.text()}`)
+    if (fetchErr || !response) {
+      logFailure('copilot', userId, fetchErr || 'No response from Gemini')
+      return errorResponse(fetchErr || 'AI service unavailable. Please try again.', 502, corsHeaders)
     }
 
     const reader = response.body?.getReader()
@@ -333,9 +383,7 @@ Ensure your answers are accurate to the medical document context if provided. If
                   if (text) {
                     accumulatedAnswer += text
                   }
-                } catch (_) {
-                  // Wait for more data
-                }
+                } catch (_) {}
                 cleaned = cleaned.substring(i + 1).trim()
                 if (cleaned.startsWith(',')) {
                   cleaned = cleaned.substring(1).trim()
@@ -347,22 +395,24 @@ Ensure your answers are accurate to the medical document context if provided. If
             }
           }
         }
-      } catch (streamErr) {
-        console.error('Error during streaming read:', streamErr)
+      } catch (streamErr: any) {
+        logFailure('copilot', userId, `Stream read error: ${streamErr.message}`)
       }
     }
 
-    const finalAnswer = `${accumulatedAnswer.trim()}\n\n${DISCLAIMER}`
+    const rawAnswer = accumulatedAnswer.trim()
+    const safeAnswer = escapeHtml(rawAnswer)
+    const finalAnswer = `${safeAnswer}\n\n${DISCLAIMER}`
 
     if (completed) {
-      return new Response(JSON.stringify({
-        conversationId: conversationIdValue,
-        answer: `${accumulatedAnswer.trim()}\n\n[Interrupted] ${DISCLAIMER}`,
-        modelUsed
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return successResponse(
+        {
+          conversationId: conversationIdValue,
+          answer: escapeHtml(`${rawAnswer}\n\n[Interrupted] ${DISCLAIMER}`),
+          modelUsed,
+        },
+        corsHeaders
+      )
     } else {
       completed = true
       req.signal.removeEventListener('abort', handleAbort)
@@ -373,23 +423,20 @@ Ensure your answers are accurate to the medical document context if provided. If
         content: finalAnswer,
         model_used: modelUsed,
         token_count: Math.ceil(finalAnswer.length / 4),
-        status: 'completed'
+        status: 'completed',
       })
 
-      return new Response(JSON.stringify({
-        conversationId: conversationIdValue,
-        answer: finalAnswer,
-        modelUsed
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return successResponse(
+        {
+          conversationId: conversationIdValue,
+          answer: finalAnswer,
+          modelUsed,
+        },
+        corsHeaders
+      )
     }
-  } catch (err) {
-    console.error('Copilot function error:', err)
-    return new Response(JSON.stringify({ error: 'Internal server error.' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+  } catch (err: any) {
+    logFailure('copilot', userId, err.message)
+    return errorResponse('Something went wrong. Please try again.', 500, getCorsHeaders(req))
   }
 })

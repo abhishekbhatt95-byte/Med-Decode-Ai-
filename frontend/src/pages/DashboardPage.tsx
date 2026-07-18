@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../context/AuthContext'
+import { motion } from 'framer-motion'
+import { FileText } from 'lucide-react'
+import { EmptyState } from '../components/EmptyState'
+import { useTranslation } from 'react-i18next'
 
 interface Document {
   id: string
@@ -16,6 +20,8 @@ interface Document {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
+  const { t } = useTranslation()
+
   
   
   const [documents, setDocuments] = useState<Document[]>([])
@@ -90,7 +96,7 @@ export const DashboardPage: React.FC = () => {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation() 
-    const confirm = window.confirm("Are you sure you want to permanently delete this document and its analysis records? This meets your DPDP deletion request rights.")
+    const confirm = window.confirm(t('dashboard.deleteConfirm'))
     if (!confirm) return
 
     try {
@@ -144,22 +150,77 @@ export const DashboardPage: React.FC = () => {
 
   
   const filterOptions = [
-    { key: 'all', label: 'All Files' },
-    { key: 'prescription', label: 'Prescriptions' },
-    { key: 'blood_report', label: 'Blood Reports' },
-    { key: 'hospital_bill', label: 'Bills' },
-    { key: 'discharge_summary', label: 'Discharge Summaries' },
-    { key: 'medicine_label', label: 'Labels' }
+    { key: 'all', label: t('dashboard.filterAll') },
+    { key: 'prescription', label: t('dashboard.filterPrescriptions') },
+    { key: 'blood_report', label: t('dashboard.filterBlood') },
+    { key: 'hospital_bill', label: t('dashboard.filterBills') },
+    { key: 'discharge_summary', label: t('dashboard.dischargeSummary') },
+    { key: 'medicine_label', label: t('dashboard.medicineLabel') }
   ]
+
 
   if (authLoading || loadingDocs) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-muted-foreground">Retrieving document history...</p>
+        <p className="text-muted-foreground">{t('consent.faq4A').includes('प्रक्रिया') ? 'दस्तावेज़ इतिहास प्राप्त किया जा रहा है...' : 'Retrieving document history...'}</p>
       </div>
     )
   }
+
+  if (documents.length === 0) {
+    return (
+      <div className="py-6 px-4 max-w-6xl mx-auto space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+            <h1 className="text-3xl font-black text-foreground font-serif">{t('dashboard.title')}</h1>
+            <p className="text-muted-foreground mt-1 mb-2">{t('dashboard.subtitle')}</p>
+            {todayUsage !== null && (
+              <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
+                📊 {t('landing.workflowTitle').includes('प्रक्रिया') 
+                  ? `10 में से ${todayUsage} दैनिक मुफ्त विश्लेषणों का उपयोग किया गया`
+                  : `${todayUsage} of 10 daily free analyses used`}
+              </span>
+            )}
+          </div>
+          <Link
+            to="/upload"
+            className="bg-primary text-primary-foreground font-bold px-6 py-3.5 rounded-full shadow-md hover:opacity-95 transition-all text-sm cursor-pointer"
+          >
+            {t('dashboard.newBtn')}
+          </Link>
+        </div>
+
+        <EmptyState
+          icon={<FileText className="w-8 h-8 text-primary" />}
+          title={t('dashboard.emptyTitle')}
+          description={t('dashboard.emptyText')}
+          actionLabel={t('landing.ctaUpload')}
+          onAction={() => navigate({ to: '/upload' })}
+        />
+      </div>
+    )
+  }
+
+
+  const listVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { type: 'spring' as const, stiffness: 100, damping: 15 },
+    },
+  };
 
   return (
     <div className="py-6 px-4 max-w-6xl mx-auto space-y-8">
@@ -167,19 +228,21 @@ export const DashboardPage: React.FC = () => {
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-foreground">Welcome Back</h1>
-          <p className="text-muted-foreground mt-1 mb-2">Translate, manage, and audit your medical document history</p>
+          <h1 className="text-3xl font-black text-foreground font-serif">{t('dashboard.title')}</h1>
+          <p className="text-muted-foreground mt-1 mb-2">{t('dashboard.subtitle')}</p>
           {todayUsage !== null && (
-            <span className="inline-flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-              📊 {todayUsage} of 10 daily free analyses used
+            <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
+              📊 {t('landing.workflowTitle').includes('प्रक्रिया') 
+                ? `10 में से ${todayUsage} दैनिक मुफ्त विश्लेषणों का उपयोग किया गया`
+                : `${todayUsage} of 10 daily free analyses used`}
             </span>
           )}
         </div>
         <Link
           to="/upload"
-          className="bg-primary text-primary-foreground font-bold px-6 py-3 rounded-xl shadow-lg hover:shadow-primary/20 hover:opacity-95 transition-all text-base cursor-pointer"
+          className="bg-primary text-primary-foreground font-bold px-6 py-3.5 rounded-full shadow-md hover:opacity-95 transition-all text-sm cursor-pointer"
         >
-          ➕ Upload Document
+          {t('dashboard.newBtn')}
         </Link>
       </div>
 
@@ -191,7 +254,7 @@ export const DashboardPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔍 Search files by name..."
+            placeholder={`🔍 ${t('dashboard.searchPlaceholder')}`}
             className="w-full border border-border rounded-xl px-4 py-3 bg-card focus:outline-none focus:ring-2 focus:ring-primary/50 text-base shadow-sm"
           />
         </div>
@@ -218,23 +281,30 @@ export const DashboardPage: React.FC = () => {
       {filteredDocuments.length === 0 ? (
         <div className="bg-card border border-border border-dashed rounded-2xl p-16 text-center text-muted-foreground shadow-sm">
           <span className="text-5xl mb-4 block">📁</span>
-          <h3 className="text-lg font-bold text-foreground mb-1">No Documents Found</h3>
+          <h3 className="text-lg font-bold text-foreground mb-1">
+            {t('landing.workflowTitle').includes('प्रक्रिया') ? 'कोई दस्तावेज़ नहीं मिला' : 'No Documents Found'}
+          </h3>
           <p className="text-sm max-w-sm mx-auto mb-6">
             {searchQuery 
-              ? "We couldn't find any documents matching your search term."
-              : "You haven't uploaded any medical records yet. Click Upload above to start."}
+              ? (t('landing.workflowTitle').includes('प्रक्रिया') ? 'हम आपकी खोज से मेल खाने वाला कोई दस्तावेज़ नहीं ढूंढ सके।' : "We couldn't find any documents matching your search term.")
+              : (t('landing.workflowTitle').includes('प्रक्रिया') ? 'आपने अभी तक कोई मेडिकल रिकॉर्ड अपलोड नहीं किया है। शुरू करने के लिए ऊपर अपलोड पर क्लिक करें।' : "You haven't uploaded any medical records yet. Click Upload above to start.")}
           </p>
           {!searchQuery && (
             <Link
               to="/upload"
               className="bg-primary text-primary-foreground font-bold px-6 py-2.5 rounded-xl inline-block"
             >
-              Upload First File
+              {t('landing.workflowTitle').includes('प्रक्रिया') ? 'पहली फ़ाइल अपलोड करें' : 'Upload First File'}
             </Link>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <motion.div
+          variants={listVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 gap-4"
+        >
           {filteredDocuments.map((doc) => {
             let statusBadge = "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"
             let statusLabel = "Processing"
@@ -244,21 +314,24 @@ export const DashboardPage: React.FC = () => {
 
             if (doc.status === 'completed') {
               statusBadge = "bg-green-500/10 text-green-600 border-green-500/20"
-              statusLabel = "Ready"
+              statusLabel = t('landing.workflowTitle').includes('प्रक्रिया') ? 'तैयार' : 'Ready'
               icon = "✅"
               cursorStyle = "cursor-pointer"
               routeTarget = `/results`
             } else if (doc.status === 'failed') {
               statusBadge = "bg-destructive/10 text-destructive border-destructive/20"
-              statusLabel = "Failed"
+              statusLabel = t('landing.workflowTitle').includes('प्रक्रिया') ? 'विफल' : 'Failed'
               icon = "❌"
               cursorStyle = "cursor-pointer"
               routeTarget = `/processing`
+            } else {
+              statusLabel = t('landing.workflowTitle').includes('प्रक्रिया') ? 'प्रसंस्करण' : 'Processing'
             }
 
             return (
-              <div
+              <motion.div
                 key={doc.id}
+                variants={itemVariants}
                 onClick={() => navigate({ to: routeTarget, search: { docId: doc.id } })}
                 className={`bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${cursorStyle}`}
               >
@@ -269,9 +342,9 @@ export const DashboardPage: React.FC = () => {
                       {doc.name}
                     </h3>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-                      <span>Uploaded: {formatDate(doc.created_at)}</span>
+                      <span>{t('landing.workflowTitle').includes('प्रक्रिया') ? 'अपलोड किया गया:' : 'Uploaded:'} {formatDate(doc.created_at)}</span>
                       <span>•</span>
-                      <span>Size: {formatBytes(doc.size)}</span>
+                      <span>{t('landing.workflowTitle').includes('प्रक्रिया') ? 'आकार:' : 'Size:'} {formatBytes(doc.size)}</span>
                       {doc.document_type !== 'unknown' && (
                         <>
                           <span>•</span>
@@ -295,21 +368,24 @@ export const DashboardPage: React.FC = () => {
                   <button
                     onClick={(e) => handleDelete(doc.id, e)}
                     className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all cursor-pointer"
-                    title="Delete document and wipe logs"
+                    title={t('landing.workflowTitle').includes('प्रक्रिया') ? 'दस्तावेज़ हटाएँ' : 'Delete document and wipe logs'}
                   >
                     🗑️
                   </button>
                 </div>
-              </div>
+              </motion.div>
             )
           })}
-        </div>
+        </motion.div>
       )}
 
       
       <div className="text-center text-xs text-muted-foreground pt-4">
-        🔒 All files and extracted medical analysis records are fully encrypted and private to your account.
+        {t('landing.workflowTitle').includes('प्रक्रिया') 
+          ? '🔒 सभी फाइलें और निकाले गए चिकित्सा विश्लेषण रिकॉर्ड आपके खाते के लिए निजी हैं और कभी साझा नहीं किए जाते हैं।' 
+          : '🔒 All files and extracted medical analysis records are private and never shared.'}
       </div>
+
     </div>
   )
 }

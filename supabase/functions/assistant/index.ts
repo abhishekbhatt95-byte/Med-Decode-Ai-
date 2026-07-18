@@ -1,8 +1,19 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.8'
 import { getCorsHeaders } from '../_shared/cors.ts'
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import {
+  authenticateRequest,
+  enforceRequestSize,
+  sanitizeUserInput,
+  escapeHtml,
+  fetchWithGuard,
+  errorResponse,
+  successResponse,
+  logFailure,
+  logRequest,
+  getClientIp,
+  isValidUUID,
+  createServiceClient,
+} from '../_shared/security.ts'
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -10,63 +21,63 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  let userId: string | null = null
+
   try {
-    const { message, conversationHistory, currentPageContext } = await req.json()
+    const sizeErr = enforceRequestSize(req, 20480)
+    if (sizeErr) return errorResponse(sizeErr, 413, corsHeaders)
 
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: 'Message is required.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    const supabase = createServiceClient()
+
+    const auth = await authenticateRequest(req, supabase)
+    if (auth.error) return errorResponse(auth.error, 401, corsHeaders)
+    userId = auth.userId
+
+    let body: any
+    try {
+      body = await req.json()
+    } catch (_) {
+      return errorResponse('Malformed JSON payload.', 400, corsHeaders)
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header.' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    const { message, conversationHistory, currentPageContext } = body
+
+    const sanitized = sanitizeUserInput(message, 1000)
+    if (sanitized.rejected) {
+      return errorResponse(sanitized.reason || 'Invalid message.', 400, corsHeaders)
     }
+    const cleanMessage = sanitized.clean
 
-    const token = authHeader.replace('Bearer ', '')
+    const safeHistory = Array.isArray(conversationHistory)
+      ? conversationHistory.slice(-10)
+      : []
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
+    const clientIp = getClientIp(req)
+    await logRequest(supabase, userId, 'assistant', clientIp)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser(token)
-    if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized.' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const userId = userData.user.id
     const today = new Date().toISOString().split('T')[0]
 
-    const { data: allowed, error: usageErr } = await supabase
-      .rpc('try_increment_daily_usage', {
-        p_user_id: userId,
-        p_date: today,
-        p_cap: 30,
-        p_feature: 'assistant_chat'
-      })
+    const { data: allowed, error: usageErr } = await supabase.rpc('try_increment_daily_usage', {
+      p_user_id: userId,
+      p_date: today,
+      p_cap: 30,
+      p_feature: 'assistant_chat',
+    })
 
     if (usageErr) {
-      console.error("Failed to increment daily chat usage:", usageErr.message)
+      logFailure('assistant', userId, `Usage check failed: ${usageErr.message}`)
     } else if (!allowed) {
-      return new Response(JSON.stringify({ error: 'Daily limit exceeded. Max 30 messages to the Assistant per day.' }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return errorResponse(
+        'Daily limit reached. You can send up to 30 messages to the Assistant per day.',
+        429,
+        corsHeaders
+      )
     }
 
-    let pageContextStr = ""
+    let pageContextStr = ''
     const documentId = currentPageContext?.documentId
 
-    if (documentId && UUID_REGEX.test(documentId)) {
+    if (documentId && isValidUUID(documentId)) {
       const { data: document } = await supabase
         .from('documents')
         .select('user_id, name')
@@ -114,20 +125,22 @@ Always remind the user you are an AI assistant and they should consult their doc
 ${pageContextStr}`
 
     const contents = []
-    for (const msg of (conversationHistory || [])) {
-      contents.push({
-        role: msg.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      })
+    for (const msg of safeHistory) {
+      if (!msg || !msg.text || typeof msg.text !== 'string') continue
+      const role = msg.sender === 'user' ? 'user' : 'model'
+      const text = msg.text.substring(0, 500)
+      contents.push({ role, parts: [{ text }] })
     }
     contents.push({
       role: 'user',
-      parts: [{ text: message }]
+      parts: [{ text: cleanMessage }],
     })
 
     const geminiKey = Deno.env.get('GEMINI_API_KEY')!
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`
+
+    const { response, error: fetchErr } = await fetchWithGuard(
+      geminiUrl,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,31 +149,23 @@ ${pageContextStr}`
           systemInstruction: { parts: [{ text: systemPrompt }] },
           generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
         }),
-      }
+      },
+      15000,
+      2
     )
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      console.error('Gemini assistant error:', errText)
-      return new Response(JSON.stringify({ error: 'AI service unavailable.' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (fetchErr || !response) {
+      logFailure('assistant', userId, fetchErr || 'No response from Gemini')
+      return errorResponse(fetchErr || 'AI service unavailable. Please try again.', 502, corsHeaders)
     }
 
-    const geminiJson = await geminiRes.json()
-    const answer = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const geminiJson = await response.json()
+    const rawAnswer = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const safeAnswer = escapeHtml(rawAnswer)
 
-    return new Response(JSON.stringify({ answer }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
-  } catch (err) {
-    console.error('Assistant function error:', err)
-    return new Response(JSON.stringify({ error: 'Internal server error.' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return successResponse({ answer: safeAnswer }, corsHeaders)
+  } catch (err: any) {
+    logFailure('assistant', userId, err.message)
+    return errorResponse('Something went wrong. Please try again.', 500, getCorsHeaders(req))
   }
 })

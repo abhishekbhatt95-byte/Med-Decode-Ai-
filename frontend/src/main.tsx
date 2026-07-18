@@ -5,8 +5,13 @@ import { RouterProvider } from '@tanstack/react-router'
 import { router } from './router'
 import { AuthProvider } from './context/AuthContext'
 import { AccessibilityProvider } from './context/AccessibilityContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { ToastRenderer } from './components/Toast'
+import { OfflineBanner } from './components/OfflineBanner'
 import * as Sentry from '@sentry/react'
 import './index.css'
+import './i18n'
+
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN
 if (sentryDsn) {
@@ -21,19 +26,25 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: false,
+      retry: 2,
+      retryDelay: attemptIndex => Math.min(500 * Math.pow(2, attemptIndex), 8000),
+      staleTime: 60_000,
     },
   },
 })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AccessibilityProvider>
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
-      </AccessibilityProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AccessibilityProvider>
+          <AuthProvider>
+            <RouterProvider router={router} />
+            <ToastRenderer />
+            <OfflineBanner />
+          </AuthProvider>
+        </AccessibilityProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>
 )
