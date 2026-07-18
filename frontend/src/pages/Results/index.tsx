@@ -15,7 +15,6 @@ import { invokeAnalyzeDocument } from '../../services/analyzeDocument'
 import { useAuth } from '../../context/AuthContext'
 import { useVoiceInput } from '../../hooks/useVoiceInput'
 import { useGeminiLive, type LiveVoiceMode } from '../../hooks/useGeminiLive'
-import { jsPDF } from 'jspdf'
 import { toast } from '../../hooks/useToast'
 import { useOffline } from '../../hooks/useOffline'
 import { withRetry } from '../../utils/retry'
@@ -644,8 +643,9 @@ export const ResultsPage: React.FC = () => {
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${title.replace(/[\s/\\:*?"<>|]+/g, '_')}_chat.md`; link.click(); URL.revokeObjectURL(url)
   }
 
-  const handleExportPDF = (title: string) => {
+  const handleExportPDF = async (title: string) => {
     try {
+      const { jsPDF } = await import('jspdf')
       const doc = new jsPDF()
       doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(0, 75, 179); doc.text(`MedDecode AI Chat: ${title}`, 14, 20)
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text(`Date: ${new Date().toLocaleString()} | Persona: ${roleKey} | Model: ${modelKey}`, 14, 28); doc.line(14, 32, 196, 32)

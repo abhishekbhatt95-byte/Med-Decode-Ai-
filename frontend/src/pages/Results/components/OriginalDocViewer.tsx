@@ -27,6 +27,8 @@ export const OriginalDocViewer: React.FC<OriginalDocViewerProps> = ({ show, url,
             src={url}
             alt="Original document"
             className="max-w-full mx-auto rounded-lg"
+            loading="lazy"
+            decoding="async"
           />
         )}
       </div>
