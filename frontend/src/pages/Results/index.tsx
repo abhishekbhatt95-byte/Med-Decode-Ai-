@@ -28,6 +28,7 @@ import { ClinicalAlerts } from './components/ClinicalAlerts'
 import { CitationsList } from './components/CitationsList'
 import { ChatPanel } from './components/ChatPanel'
 import { AudioVoiceOverlay } from './components/AudioVoiceOverlay'
+import { BillAuditorView } from './components/BillAuditorView'
 
 // ── Shared types (inlined here; consumed by sub-components via their own import of utils) ──
 interface SearchParams { docId: string }
@@ -42,6 +43,8 @@ interface AbnormalValue { parameter: string; value: string; referenceRange: stri
 
 interface AnalysisSection { title: string; content: string }
 
+interface BillItem { description: string; amount: string }
+
 interface Analysis {
   id: string; summary: string
   structured_output: {
@@ -49,6 +52,8 @@ interface Analysis {
     abnormalValues: AbnormalValue[]
     medicalSummary?: string
     outputLanguage?: 'english' | 'hindi'
+    billItems?: BillItem[]
+    billTotal?: string | null
   }
   doctor_questions: string[]
   document_id?: string
@@ -91,7 +96,7 @@ export const ResultsPage: React.FC = () => {
   const [isPdf, setIsPdf] = useState(false)
 
   // ── Summary card display ──
-  const [viewMode, setViewMode] = useState<'simple' | 'medical'>('simple')
+  const [viewMode, setViewMode] = useState<'simple' | 'medical' | 'bill_auditor'>('simple')
   const [speaking, setSpeaking] = useState(false)
   const [speakingText, setSpeakingText] = useState<string | null>(null)
 
@@ -739,7 +744,7 @@ export const ResultsPage: React.FC = () => {
     )
   }
 
-  const { sections = [], abnormalValues = [] } = analysis.structured_output
+  const { sections = [], abnormalValues = [], billItems = [], billTotal = null } = analysis.structured_output
   const docType = docInfo?.document_type || 'unknown'
   const isBloodOrDiagnostic = docType === 'blood_report' || docType === 'diagnostic_report'
   const showMedicinesFirst = medicines.length > 0 && !isBloodOrDiagnostic
@@ -782,7 +787,16 @@ export const ResultsPage: React.FC = () => {
         {/* Left column: medicines + alerts + chat */}
         <div className="lg:col-span-2 space-y-8 text-left">
 
-          {showMedicinesFirst && (
+          {/* Bill Auditor mode — always shown when tab is active */}
+          {viewMode === 'bill_auditor' && (
+            <BillAuditorView
+              billItems={billItems}
+              billTotal={billTotal ?? null}
+            />
+          )}
+
+          {/* Normal (simple / medical) content — hidden in Bill Auditor mode */}
+          {viewMode !== 'bill_auditor' && showMedicinesFirst && (
             <MedicineTable
               medicines={medicines}
               expandedMedicines={expandedMedicines}
@@ -791,7 +805,7 @@ export const ResultsPage: React.FC = () => {
             />
           )}
 
-          {showAbnormalFirst && (
+          {viewMode !== 'bill_auditor' && showAbnormalFirst && (
             <ClinicalAlerts
               abnormalValues={abnormalValues}
               viewMode={viewMode}
@@ -800,7 +814,7 @@ export const ResultsPage: React.FC = () => {
           )}
 
           {/* General report sections (shown when no medicines & no abnormal, or for diagnostic) */}
-          {((medicines.length === 0 && abnormalValues.length === 0) || isBloodOrDiagnostic) && sections.length > 0 && (
+          {viewMode !== 'bill_auditor' && ((medicines.length === 0 && abnormalValues.length === 0) || isBloodOrDiagnostic) && sections.length > 0 && (
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
               <h2 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
                 <span className="text-primary text-2xl">📋</span> Report Details & Glossary
@@ -819,7 +833,7 @@ export const ResultsPage: React.FC = () => {
           )}
 
           {/* Medicines on blood/diagnostic docs */}
-          {isBloodOrDiagnostic && medicines.length > 0 && (
+          {viewMode !== 'bill_auditor' && isBloodOrDiagnostic && medicines.length > 0 && (
             <MedicineTable
               medicines={medicines}
               expandedMedicines={expandedMedicines}
