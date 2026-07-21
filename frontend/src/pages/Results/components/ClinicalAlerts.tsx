@@ -11,7 +11,7 @@ export interface AbnormalValue {
 export interface ClinicalAlertsProps {
   abnormalValues: AbnormalValue[]
   /** 'simple' renders plain English, 'medical' renders the lab visualizer */
-  viewMode: 'simple' | 'medical'
+  viewMode: 'simple' | 'medical' | 'bill_auditor'
   textSizeClass: string
 }
 

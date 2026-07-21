@@ -11,5 +11,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('gsap')) return 'vendor-gsap';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('jspdf')) return 'vendor-jspdf';
+            if (id.includes('recharts')) return 'vendor-recharts';
+            return 'vendor-core';
+          }
+        }
+      }
+    }
+  }
 })
 

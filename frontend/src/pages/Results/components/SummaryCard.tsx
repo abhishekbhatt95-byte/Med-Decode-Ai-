@@ -10,6 +10,8 @@ export interface Analysis {
     abnormalValues: { parameter: string; value: string; referenceRange: string; explanation: string }[]
     medicalSummary?: string
     outputLanguage?: 'english' | 'hindi'
+    billItems?: { description: string; amount: string }[]
+    billTotal?: string | null
   }
   doctor_questions: string[]
   document_id?: string
@@ -25,8 +27,8 @@ export interface SummaryCardProps {
   analysis: Analysis
   docInfo: DocInfo | null
   confidence: number | null
-  viewMode: 'simple' | 'medical'
-  setViewMode: (v: 'simple' | 'medical') => void
+  viewMode: 'simple' | 'medical' | 'bill_auditor'
+  setViewMode: (v: 'simple' | 'medical' | 'bill_auditor') => void
   speaking: boolean
   onSpeak: () => void
   shareLoading: boolean
@@ -285,7 +287,9 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
           <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm md:text-base font-medium max-w-4xl">
             {viewMode === 'simple'
               ? analysis.summary
-              : analysis.structured_output?.medicalSummary || analysis.summary}
+              : viewMode === 'medical'
+              ? analysis.structured_output?.medicalSummary || analysis.summary
+              : 'Switch to Clinical Mode or Patient Mode to read the document summary. Bill Auditor shows only the billing line items extracted from this document.'}
           </p>
         </div>
 
@@ -312,13 +316,12 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
             Clinical Mode
           </button>
           <button
-            onClick={() => {
-              // bill auditor toast — no-op placeholder (matches original)
-            import('../../../hooks/useToast').then(({ toast }) =>
-                toast.info('Billing Auditor Mode loaded. Billing codes and rates analyzed.')
-              )
-            }}
-            className="px-5 py-2.5 rounded-full text-xs font-black transition-all cursor-pointer border bg-transparent text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600"
+            onClick={() => setViewMode('bill_auditor')}
+            className={`px-5 py-2.5 rounded-full text-xs font-black transition-all cursor-pointer border ${
+              viewMode === 'bill_auditor'
+                ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20 shadow-sm'
+                : 'bg-transparent text-slate-400 dark:text-slate-500 border-transparent hover:text-slate-600'
+            }`}
           >
             Bill Auditor
           </button>
