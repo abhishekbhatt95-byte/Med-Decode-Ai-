@@ -36,3 +36,7 @@ supabase/.temp/
 frontend/playwright-report/
 frontend/test-results/
 frontend/.playwright-browsers/
+
+# Gemini IDE configurations and backups
+.gemini/
+project_backup.zip
