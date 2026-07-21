@@ -19,7 +19,7 @@ export const ScrollSequence: React.FC = () => {
 
   const FRAME_PATH = "/images/Hero%20section/";
   const FRAME_PREFIX = "ezgif-frame-";
-  const FRAME_EXT = ".png";
+  const FRAME_EXT = ".jpg";
   const FRAME_COUNT = 120;
   const SCROLL_LENGTH_VH = 3;
 
