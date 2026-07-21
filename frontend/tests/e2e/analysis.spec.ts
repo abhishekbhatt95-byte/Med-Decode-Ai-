@@ -45,8 +45,6 @@ test.describe('Upload & Analysis flow', () => {
   })
 
   test('shows file name after selecting a file', async ({ page }) => {
-    const fileChooserPromise = page.waitForEvent('filechooser')
-
     // Click the visible upload area to trigger the hidden file input
     const dropzone = page.locator('input[type="file"]')
     await dropzone.setInputFiles({

@@ -4,6 +4,7 @@ import {
   createRouter,
   Outlet,
   Link,
+  useLocation,
 } from '@tanstack/react-router'
 import React, { Suspense, lazy, useState } from 'react'
 import { useAuth } from './context/AuthContext'
@@ -56,10 +57,13 @@ const RootLayout = () => {
   const { t } = useTranslation()
   const [isAccessPopoverOpen, setIsAccessPopoverOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const location = useLocation()
 
   const isAuthRoute = ['/dashboard', '/upload', '/trends', '/profile', '/results', '/processing'].some(
-    path => window.location.pathname.startsWith(path)
+    path => location.pathname.startsWith(path)
   )
+
+  const isLandingRoute = location.pathname === '/'
 
   // If user is authenticated and on an auth page, show sidebar shell
   if (user && isAuthRoute) {
@@ -176,35 +180,37 @@ const RootLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
       {/* Header */}
-      <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-40" role="banner">
-        <div className="max-w-6xl mx-auto px-6 py-5.5 flex justify-between items-center">
-          <Link to="/" className="hover:opacity-90 flex items-center gap-3.5 text-left" aria-label="MedDecode AI — Home">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-black text-lg shrink-0 shadow-sm">
-              M
-            </div>
-            <span className="text-2xl font-serif font-black text-foreground leading-tight tracking-tight">MedDecode</span>
-          </Link>
-          
-          <div className="flex items-center gap-4">
-            <LanguageSwitcher />
-
-            <Link
-              to="/auth"
-              className="bg-primary text-primary-foreground px-6 py-3 rounded-full text-sm font-black hover:opacity-95 transition-all shadow-sm"
-            >
-              {t('nav.getStarted')}
+      {!isLandingRoute && (
+        <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-40" role="banner">
+          <div className="max-w-6xl mx-auto px-6 py-5.5 flex justify-between items-center">
+            <Link to="/" className="hover:opacity-90 flex items-center gap-3.5 text-left" aria-label="MedDecode AI — Home">
+              <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-black text-lg shrink-0 shadow-sm">
+                M
+              </div>
+              <span className="text-2xl font-serif font-black text-foreground leading-tight tracking-tight">MedDecode</span>
             </Link>
+            
+            <div className="flex items-center gap-4">
+              <LanguageSwitcher />
 
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 text-foreground focus:outline-none hover:bg-muted rounded-full cursor-pointer transition-all"
-              aria-label="Open Menu"
-            >
-              <Menu className="w-7 h-7" />
-            </button>
+              <Link
+                to="/auth"
+                className="bg-primary text-primary-foreground px-6 py-3 rounded-full text-sm font-black hover:opacity-95 transition-all shadow-sm"
+              >
+                {t('nav.getStarted')}
+              </Link>
+
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="p-2 text-foreground focus:outline-none hover:bg-muted rounded-full cursor-pointer transition-all"
+                aria-label="Open Menu"
+              >
+                <Menu className="w-7 h-7" />
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
       <NavDrawer isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
 
       {/* Main */}
