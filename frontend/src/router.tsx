@@ -63,8 +63,6 @@ const RootLayout = () => {
     path => location.pathname.startsWith(path)
   )
 
-  const isLandingRoute = location.pathname === '/'
-
   // If user is authenticated and on an auth page, show sidebar shell
   if (user && isAuthRoute) {
     return (
@@ -177,12 +175,14 @@ const RootLayout = () => {
   // ----------------------------------------------------
   // PUBLIC LAYOUT (LandingPage, AuthPage, ConsentPage, etc.)
   // ----------------------------------------------------
+  const isAuthPage = location.pathname === '/auth'
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-200">
       {/* Header */}
-      {!isLandingRoute && (
+      {!isAuthPage && (
         <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-40" role="banner">
-          <div className="max-w-6xl mx-auto px-6 py-5.5 flex justify-between items-center">
+          <div className="w-[92%] max-w-[1560px] mx-auto py-5 flex justify-between items-center">
             <Link to="/" className="hover:opacity-90 flex items-center gap-3.5 text-left" aria-label="MedDecode AI — Home">
               <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-black text-lg shrink-0 shadow-sm">
                 M
@@ -211,16 +211,16 @@ const RootLayout = () => {
           </div>
         </header>
       )}
-      <NavDrawer isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+      {!isAuthPage && <NavDrawer isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />}
 
       {/* Main */}
-      <main className="flex-1 w-full" role="main" id="main-content">
+      <main className="flex-1 w-full flex flex-col" role="main" id="main-content">
         <Outlet />
       </main>
 
-
       {/* Footer */}
-      <footer className="bg-muted/30 border-t border-border py-10 md:py-12 px-6 w-full mt-auto" role="contentinfo">
+      {!isAuthPage && (
+        <footer className="bg-muted/30 border-t border-border py-10 md:py-12 px-6 w-full mt-auto" role="contentinfo">
 
         <div className="max-w-6xl mx-auto w-full grid grid-cols-1 md:grid-cols-4 gap-10 text-left">
           {/* Logo & Brand Column */}
@@ -298,6 +298,7 @@ const RootLayout = () => {
           </div>
         </div>
       </footer>
+      )}
       <AssistantWidget />
     </div>
   )

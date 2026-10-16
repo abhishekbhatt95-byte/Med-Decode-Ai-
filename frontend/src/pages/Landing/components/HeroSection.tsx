@@ -5,11 +5,18 @@ import {
   Sparkles,
   CheckCircle2,
   Activity,
+  Shield,
+  Check,
+  Pill,
+  Beaker,
+  Receipt,
+  ClipboardList,
+  Tag,
+  Info,
 } from "lucide-react";
 import { SAMPLE_DOCUMENTS, type SampleDocument } from "../../../utils/sampleData";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
-import { ScrollSequence } from "./ScrollSequence";
 
 export const HeroSection: React.FC = () => {
   const { t } = useTranslation();
@@ -44,18 +51,243 @@ export const HeroSection: React.FC = () => {
     localStorage.setItem('meddecode_language', lang);
   };
 
+  const supportingTags = ["CARE", "SECURE", "MEDICAL", "HELP", "DOCUMENTS"];
+
+  const prescriptionItems = [
+    { name: "LISINOPRIL 20mg daily", verified: true },
+    { name: "SIMVASTATIN 40mg nightly", verified: true },
+    { name: "VITAMIN D3 2000IU daily", verified: true },
+    { name: "LISINOPRIL 20mg daily", verified: true },
+    { name: "VITAMIN D3 20mg daily", verified: true },
+  ];
+
+  const supportedDocumentTypes = [
+    {
+      title: "Prescriptions",
+      description: "Medication names, dosage instructions, and schedules.",
+      badge: "Core Support",
+      icon: Pill,
+    },
+    {
+      title: "Blood Reports",
+      description: "Lab values, reference ranges, and tested panels.",
+      badge: "Core Support",
+      icon: Beaker,
+    },
+    {
+      title: "Hospital Bills",
+      description: "Charges, invoice items, and insurance-related details.",
+      badge: "Core Support",
+      icon: Receipt,
+    },
+    {
+      title: "Discharge Summaries",
+      description: "Diagnoses documented in the record, treatments, and discharge instructions.",
+      badge: "Core Support",
+      icon: ClipboardList,
+    },
+    {
+      title: "Medicine Labels",
+      description: "Medicine instructions, warnings, and intake guidance.",
+      badge: "Core Support",
+      icon: Tag,
+    },
+  ];
+
   return (
     <>
-      <ScrollSequence />
-
-      {/* 2. Language Selection & Primary Hero Actions */}
-      <section className="relative bg-background border-b border-border py-16 px-6 w-full flex flex-col items-center justify-center overflow-hidden">
+      {/* 1. Simple Static Hero Section */}
+      <section className="relative bg-background border-b border-border pt-6 sm:pt-8 md:pt-10 pb-12 sm:pb-16 md:pb-20 w-full overflow-hidden">
         {/* Subtle decorative background gradient */}
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-primary/5 via-primary/2 to-transparent pointer-events-none" />
 
-        <div className="max-w-4xl mx-auto w-full text-center space-y-10 relative z-10">
+        <div className="w-[92%] max-w-[1560px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_350px] xl:grid-cols-[1fr_360px] gap-8 lg:gap-12 xl:gap-16 items-start relative z-10">
+          {/* Main Hero Content (Left-aligned, perfectly flush with navbar logo vertical line) */}
+          <div className="space-y-6 sm:space-y-7 text-left flex flex-col items-start w-full">
+            {/* Small trust label */}
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary border border-primary/20 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+              <Shield className="w-3.5 h-3.5" />
+              <span>PRIVATE &amp; SECURE</span>
+            </div>
+
+            {/* Main headline: Editorial serif, 64-76px on large desktop, wraps into 2 lines on wide screens */}
+            <h1 className="text-[2.5rem] sm:text-[3.25rem] md:text-[3.75rem] lg:text-[clamp(3.75rem,4.2vw,4.75rem)] font-black text-foreground font-serif tracking-tight leading-[1.0] text-left">
+              Understand your medical documents,<br className="hidden lg:inline" /> without the confusion.
+            </h1>
+
+            {/* Supporting text: 19-21px desktop readability with comfortable gap */}
+            <p className="text-base sm:text-lg md:text-[1.2rem] text-muted-foreground leading-relaxed max-w-2xl font-medium pt-1">
+              Upload prescriptions, blood reports, hospital bills, discharge summaries, and medicine labels. Get clear, simple explanations of complex medical information.
+            </p>
+
+            {/* CTA Buttons: prominent GET STARTED & secondary LEARN MORE */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 sm:gap-4 pt-2 w-full sm:w-auto">
+              <Link
+                to="/upload"
+                className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-black px-8 py-4 rounded-full text-center shadow-md hover:shadow-lg transition-all duration-200 text-sm sm:text-base cursor-pointer tracking-wider uppercase inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-[0.99]"
+              >
+                GET STARTED
+              </Link>
+
+              <a
+                href="#supported-docs"
+                onClick={(e) => {
+                  const el = document.getElementById("supported-docs");
+                  if (el) {
+                    e.preventDefault();
+                    el.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+                className="w-full sm:w-auto bg-card hover:bg-muted/70 text-foreground border border-border font-black px-8 py-4 rounded-full text-center shadow-sm hover:shadow transition-all duration-200 text-sm sm:text-base cursor-pointer tracking-wider uppercase inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2 active:scale-[0.99]"
+              >
+                LEARN MORE
+              </a>
+            </div>
+
+            {/* Small supporting tags */}
+            <div className="pt-2 flex flex-wrap items-center justify-start gap-2 text-xs">
+              {supportingTags.map((tag, idx) => (
+                <React.Fragment key={tag}>
+                  <span className="font-mono font-bold tracking-widest text-muted-foreground text-[11px] sm:text-xs">
+                    {tag}
+                  </span>
+                  {idx < supportingTags.length - 1 && (
+                    <span className="text-border text-xs select-none">|</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          {/* Recreated lightweight HTML/CSS Prescription Card (Secondary to headline, right side on desktop) */}
+          <div className="flex justify-start lg:justify-end w-full pt-4 lg:pt-1">
+            <div className="w-full max-w-[340px] sm:max-w-[360px] bg-card rounded-2xl border border-border shadow-lg overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl">
+              {/* Card Header Banner */}
+              <div className="bg-[#0F6E56] text-white px-5 py-3.5 flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-widest font-mono">
+                  PRESCRIPTION SUMMARY
+                </span>
+                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
+                  Rx Decoded
+                </span>
+              </div>
+
+              {/* Patient Info */}
+              <div className="p-5 space-y-4">
+                <div className="border-b border-border/80 pb-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
+                    PATIENT NAME
+                  </div>
+                  <div className="text-base sm:text-lg font-serif font-black text-foreground mt-0.5">
+                    EVELYN REED
+                  </div>
+                </div>
+
+                {/* Prescription List items */}
+                <div className="space-y-2.5">
+                  {prescriptionItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-xs py-1 px-2.5 rounded-lg bg-secondary/40 border border-border/50 text-foreground"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded border border-primary/40 bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                        <span className="font-medium tracking-tight font-mono text-[11px] sm:text-xs">
+                          {item.name}
+                        </span>
+                      </div>
+                      <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-1.5" />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Card Footer Stamp */}
+                <div className="pt-3 border-t border-border flex items-center justify-center gap-2 text-[11px] font-bold font-mono tracking-wider text-primary">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>VERIFIED &amp; SECURE</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. What can MedDecode help you understand? - Supported Document Types Section */}
+      <section id="supported-docs" className="bg-background py-16 md:py-20 w-full border-b border-border scroll-mt-6">
+        <div className="w-[92%] max-w-[1560px] mx-auto space-y-12">
+          {/* Section Header */}
+          <div className="text-center max-w-3xl mx-auto space-y-3.5">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary border border-primary/20 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+              <span>SUPPORTED DOCUMENTS</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-foreground font-serif tracking-tight leading-tight">
+              What can MedDecode help you understand?
+            </h2>
+            <p className="text-muted-foreground font-medium text-sm sm:text-base md:text-lg max-w-2xl mx-auto">
+              Our secure OCR and translation engine is purpose-built to break down clinical jargon across the five most common healthcare documents.
+            </p>
+          </div>
+
+          {/* 5-Card Responsive Grid: 3 columns desktop, 2 columns tablet, 1 column mobile */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-stretch">
+            {supportedDocumentTypes.map((doc, idx) => {
+              const Icon = doc.icon;
+              return (
+                <div
+                  key={idx}
+                  tabIndex={0}
+                  className="group bg-card border border-border hover:border-primary/50 focus:border-primary rounded-3xl p-7 flex flex-col justify-between shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all duration-200"
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="w-13 h-13 rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground group-focus:bg-primary group-focus:text-primary-foreground flex items-center justify-center transition-colors duration-200 shadow-sm">
+                        <Icon className="w-6 h-6 stroke-[2.2]" />
+                      </div>
+                      <span className="text-[10px] font-mono font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-secondary text-muted-foreground border border-border">
+                        {doc.badge}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl sm:text-2xl font-black font-serif text-foreground group-hover:text-primary transition-colors duration-200">
+                      {doc.title}
+                    </h3>
+
+                    <p className="text-sm sm:text-base text-muted-foreground leading-relaxed font-medium">
+                      {doc.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-6 mt-4 border-t border-border/70 flex items-center justify-between text-xs font-mono font-bold text-muted-foreground group-hover:text-foreground transition-colors">
+                    <span>Decodes &amp; explains</span>
+                    <span className="text-primary font-bold">✓ Ready</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Clear Medical Disclaimer */}
+          <div className="max-w-4xl mx-auto bg-primary/5 border border-primary/20 rounded-2xl p-5 sm:p-6 flex items-start gap-4 text-left shadow-sm">
+            <Info className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-primary font-mono">
+                Important Medical Notice &amp; Disclaimer
+              </h4>
+              <p className="text-xs sm:text-sm text-foreground/90 font-medium leading-relaxed">
+                MedDecode AI is designed solely for educational reference and health literacy support to explain medical paperwork in plain language. <strong>It does not provide medical diagnoses, treatment instructions, or replace the clinical judgment and advice of a qualified healthcare professional.</strong> Always consult your physician or specialist for medical decisions.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Language Selection Section */}
+      <section className="relative bg-background border-b border-border py-14 px-6 w-full flex flex-col items-center justify-center overflow-hidden">
+        <div className="max-w-4xl mx-auto w-full text-center space-y-8 relative z-10">
           {/* Header */}
-          <div className="space-y-3.5 max-w-xl mx-auto">
+          <div className="space-y-3 max-w-xl mx-auto">
             <h3 className="text-2xl md:text-3xl font-black text-foreground font-serif tracking-tight leading-tight">
               {currentLang === 'hi' ? 'अपनी पसंदीदा भाषा का चयन करें' : 'Select Your Preferred Language'}
             </h3>
@@ -97,33 +329,6 @@ export const HeroSection: React.FC = () => {
               </div>
               <span className="text-2xl">🇮🇳</span>
             </button>
-          </div>
-
-          {/* Action CTAs */}
-          <div className="flex flex-wrap justify-center items-center gap-4.5 pt-4">
-            <Link
-              to="/upload"
-              className="bg-primary hover:opacity-95 text-primary-foreground font-black px-8 py-4.5 rounded-full text-center shadow-lg hover:shadow-primary/15 transition-all text-sm md:text-base cursor-pointer flex items-center gap-2 group active:scale-[0.98] tracking-wide uppercase"
-            >
-              <span>{t('landing.decodeBtn') || 'Decode Your Document Now'}</span>
-              <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </Link>
-
-            <a
-              href="#interactive-demo"
-              onClick={(e) => {
-                const el = document.getElementById("interactive-demo");
-                if (el) {
-                  e.preventDefault();
-                  el.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
-              className="bg-card text-foreground border border-border hover:bg-muted font-black px-8 py-4.5 rounded-full text-center transition-all text-sm md:text-base cursor-pointer shadow-sm active:scale-[0.98] tracking-wide uppercase"
-            >
-              {t('landing.demoBtn') || 'Try Interactive Demo'}
-            </a>
           </div>
         </div>
       </section>
