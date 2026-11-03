@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${MEDDECODE_RLS_JDBC_URL}
+    username: ${MEDDECODE_RLS_DB_USERNAME:meddecode_backend}
+    password: ${MEDDECODE_RLS_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 1
+      minimum-idle: 1
+      connection-timeout: 20000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+supabase:
+  url: ${MEDDECODE_RLS_SUPABASE_URL}
+  jwt:
+    issuer: ${MEDDECODE_RLS_JWT_ISSUER}
+    secret: ""
