@@ -1,0 +1,61 @@
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: meddecode-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database configuration (Strictly safe for existing Supabase Postgres)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # MANDATORY SAFETY RULE: NEVER modify or drop existing tables in Supabase Postgres
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        default_schema: public
+
+# Supabase Hybrid Integration Settings
+supabase:
+  url: ${SUPABASE_URL}
+  jwt:
+    secret: ${SUPABASE_JWT_SECRET:}
+    issuer: ${SUPABASE_JWT_ISSUER}
+  storage:
+    bucket-name: ${SUPABASE_STORAGE_BUCKET:documents}
+
+# Google Gemini API
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+# Spring Boot Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
